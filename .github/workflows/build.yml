@@ -1,0 +1,123 @@
+name: Build
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install Zig
+        uses: mlugg/setup-zig@v2
+        with:
+          version: 0.15.2
+
+      - name: Test
+        run: zig build test
+
+  build:
+    name: ${{ matrix.archive }}
+    needs: test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86-linux-musl
+            cpu: x86_v2
+            os: ubuntu-latest
+            archive: cathode-run-linux-x86.tar.gz
+
+          - target: x86_64-linux-musl
+            cpu: x86_64_v2
+            os: ubuntu-latest
+            archive: cathode-run-linux-x86_64.tar.gz
+
+          - target: x86-windows
+            cpu: x86_v2
+            os: windows-latest
+            archive: cathode-run-windows-x86.zip
+
+          - target: x86_64-windows
+            cpu: x86_64_v2
+            os: windows-latest
+            archive: cathode-run-windows-x86_64.zip
+
+          - target: aarch64-macos
+            cpu: baseline
+            os: macos-latest
+            archive: cathode-run-macos-aarch64.tar.gz
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install Zig
+        uses: mlugg/setup-zig@v2
+        with:
+          version: 0.16.0
+          cache-key: ${{ matrix.os }}-0.16.0
+
+      - name: Build
+        run: zig build -Dtarget=${{ matrix.target }} -Dcpu=${{ matrix.cpu }} -Doptimize=ReleaseFast
+
+      - name: Package SDK Architecture (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          mkdir -p staging/bin
+          # mkdir -p staging/lib
+
+          cp zig-out/bin/cathode-run staging/bin/cathode-run
+          # cp ${{ matrix.lib_src }} staging/lib/$(basename ${{ matrix.lib_src }})
+          # cp -rf zig-out/include staging/include
+          # cp -rf zig-out/share staging/share
+
+          chmod +x staging/bin/cathode-run
+
+          mkdir dist
+          tar -czf dist/${{ matrix.archive }} -C staging .
+
+      - name: Package SDK Architecture (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path staging/bin
+          # New-Item -ItemType Directory -Force -Path staging/share
+
+          Copy-Item "zig-out/bin/cathode-run.exe" -Destination "staging/bin/cathode-run.exe"
+          # Copy-Item "zig-out/share/*" -Destination "staging/share" -Recurse -Force
+
+          New-Item -ItemType Directory -Force -Path dist
+          Compress-Archive -Path staging/* -DestinationPath "dist/${{ matrix.archive }}"
+
+      - name: Upload Packaged Asset
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.archive }}
+          path: dist/
+
+  release:
+    name: Release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download all compressed assets
+        uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Publish to GitHub Releases
+        uses: softprops/action-gh-release@v3
+        with:
+          files: artifacts/*
+          generate_release_notes: true
