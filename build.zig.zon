@@ -1,8 +1,8 @@
 .{
     .name = .cathode_run,
-    .version = "0.0.0",
+    .version = "0.1.0",
     .fingerprint = 0xb1c5ec178b2bcc7a,
-    .minimum_zig_version = "0.16.0",
+    .minimum_zig_version = "0.15.2",
     .dependencies = .{},
     .paths = .{
         "build.zig",
