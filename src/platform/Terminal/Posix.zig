@@ -161,6 +161,7 @@ fn enableRawMode(self: *@This()) !void {
             return error.TCGetAttrFailed;
         },
     }
+    errdefer self.disableRawMode() catch |err| log.err("disabling raw mode failed: {t}", .{err});
     var raw = self.termios;
     raw.c_lflag &= ~@as(c.tcflag_t, c.ECHO | c.ICANON);
     raw.c_cc[c.VMIN] = 0;
@@ -172,8 +173,36 @@ fn enableRawMode(self: *@This()) !void {
             return error.TCSetAttrFailed;
         },
     }
-    // TODO: Detect TTY support
-    try self.write(static.ansi.cur_hide ++ static.ansi.kbd_raw);
+
+    try self.write(static.ansi.query_pe ++ static.ansi.query_da);
+    var input_buf: [17]core.InputResult = undefined;
+    var is_pe = false;
+    var is_da = false;
+    for (0..100) |_| {
+        _ = try self.readInput(&input_buf);
+        for (&input_buf) |input| switch (input.event) {
+            .none => break,
+            .err => return error.InputFailed,
+            .query => switch (input.querytype()) {
+                .pe => is_pe = true,
+                .da => is_da = true,
+            },
+            else => {},
+        };
+        if (is_da) {
+            if (is_pe) {
+                log.debug("Querying keyboard mode sucessful", .{});
+                try self.write(static.ansi.cur_hide ++ static.ansi.kbd_raw);
+                return;
+            } else {
+                log.err("Application requires Kitty Keyboard Protocol", .{});
+                return error.KeyboardProtocolNotSupported;
+            }
+        }
+        try sleepNs(static.delay.step);
+    }
+    log.err("Failed querying device attributes", .{});
+    return error.QueryingDeviceAttributesFailed;
 }
 
 fn disableRawMode(self: *const @This()) !void {

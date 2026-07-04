@@ -68,8 +68,8 @@ pub fn deinit(self: *@This(), gpa: Allocator) void {
 }
 
 pub fn setup(self: *@This()) !void {
-    try self.impl.setup(self.stdout_buf[0..stdout_buf_len.v]);
     self.last_frame = try self.impl.getNow();
+    try self.impl.setup(self.stdout_buf[0..stdout_buf_len.v]);
 }
 
 pub fn teardown(self: *@This()) !void {

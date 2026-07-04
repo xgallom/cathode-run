@@ -33,19 +33,19 @@ pub const cathode_run_options: Options = .{
 
 pub const std_options: std.Options = .{
     .log_scope_levels = &.{
-        .{ .scope = .core, .level = .info },
-        .{ .scope = .cp437, .level = .info },
-        .{ .scope = .game, .level = .info },
-        .{ .scope = .int, .level = .info },
-        .{ .scope = .main, .level = .info },
-        .{ .scope = .platform, .level = .info },
-        .{ .scope = .param, .level = .info },
-        .{ .scope = .prng, .level = .info },
-        .{ .scope = .read, .level = .info },
-        .{ .scope = .scratch, .level = .info },
-        .{ .scope = .static, .level = .info },
-        .{ .scope = .txt, .level = .info },
-        .{ .scope = .unit, .level = .info },
+        .{ .scope = .core, .level = .warn },
+        .{ .scope = .cp437, .level = .warn },
+        .{ .scope = .game, .level = .warn },
+        .{ .scope = .int, .level = .warn },
+        .{ .scope = .main, .level = .warn },
+        .{ .scope = .platform, .level = .warn },
+        .{ .scope = .param, .level = .warn },
+        .{ .scope = .prng, .level = .warn },
+        .{ .scope = .read, .level = .warn },
+        .{ .scope = .scratch, .level = .warn },
+        .{ .scope = .static, .level = .warn },
+        .{ .scope = .txt, .level = .warn },
+        .{ .scope = .unit, .level = .warn },
     },
 };
 
@@ -54,11 +54,14 @@ pub const InputEvent = enum {
     err,
     down,
     up,
+    query,
 };
 
 pub const InputResult = struct {
     event: InputEvent,
     keycode: i32 = 0,
+
+    pub const QueryType = enum(i32) { pe = 1, da = 2 };
 
     pub const none: @This() = .{ .event = .none };
     pub const err: @This() = .{ .event = .err };
@@ -69,6 +72,15 @@ pub const InputResult = struct {
 
     pub fn up(keycode: i32) @This() {
         return .{ .event = .up, .keycode = keycode };
+    }
+
+    pub fn query(query_type: QueryType) @This() {
+        return .{ .event = .query, .keycode = @intFromEnum(query_type) };
+    }
+
+    pub fn querytype(self: @This()) QueryType {
+        assert(self.event == .query);
+        return @enumFromInt(self.keycode);
     }
 };
 
@@ -148,7 +160,11 @@ pub const UISession = struct {
 };
 
 pub fn transfer(self: *GameState, to: game.SessionState) !game.SessionState {
-    if (self.session.state == to) return to;
+    if (self.session.state == to) {
+        @branchHint(.likely);
+        return to;
+    }
+
     log.debug("transfer: {t} -> {t}", .{ self.session.state, to });
     switch (to) {
         .start => unreachable,
@@ -239,6 +255,7 @@ fn consumeInputs(self: *GameState) !game.SessionState {
             .err => return error.InputFailed,
             .down => int.flag.set(&self.ui.state, UIState.one(.key_down)),
             .up => int.flag.clr(&self.ui.state, UIState.one(.key_down)),
+            .query => {},
         }
         input_len += 1;
     }
@@ -267,6 +284,7 @@ fn updateIntro(self: *GameState) !game.SessionState {
             }
             int.flag.clr(&self.ui.state, UIState.many(&.{ .key_down, .waiting_release }));
         },
+        .query => {},
     };
 
     if (self.ui.delay > static.delay.intro_in and
@@ -349,6 +367,7 @@ fn updateRunning(self: *GameState) !game.SessionState {
             } else {},
             else => {},
         },
+        .query => {},
     };
 
     {
@@ -403,6 +422,7 @@ fn updateScore(self: *GameState) !game.SessionState {
             }
             int.flag.clr(&self.ui.state, UIState.many(&.{ .key_down, .waiting_release }));
         },
+        .query => {},
     };
 
     if (int.flag.has(self.ui.state, UIState.one(.skip))) {

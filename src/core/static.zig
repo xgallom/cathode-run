@@ -58,6 +58,9 @@ pub const ansi = struct {
     pub const kbd_raw = "\x1b[>11u";
     pub const kbd_raw_end = "\x1b[<u";
 
+    pub const query_pe = "\x1b[?u";
+    pub const query_da = "\x1b[c";
+
     pub fn attr(ca: game.CellAttr) []const u8 {
         return attr_data[ca.bg][ca.fg];
     }

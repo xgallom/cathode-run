@@ -10,6 +10,7 @@ pub const State = enum {
     begin,
     esc,
     bracket,
+    question_mark,
     semicolon,
     colon,
     end,
@@ -49,6 +50,10 @@ pub fn parse(self: *@This(), comptime takeByte: fn () ?u8) core.InputResult {
                     self.result.keycode += c - '0';
                     continue :loop .bracket;
                 },
+                '?' => {
+                    self.state = .question_mark;
+                    continue :loop .question_mark;
+                },
                 ';' => {
                     self.state = .semicolon;
                     continue :loop .semicolon;
@@ -63,6 +68,25 @@ pub fn parse(self: *@This(), comptime takeByte: fn () ?u8) core.InputResult {
                 },
                 else => {
                     log.err("bracket: invalid character {x:02}", .{c});
+                    return .err;
+                },
+            }
+        },
+        .question_mark => {
+            log.debug("question_mark", .{});
+            const c = takeByte() orelse return .none;
+            switch (c) {
+                '0'...'9', ';' => continue :loop .question_mark,
+                'u' => {
+                    self.state = .begin;
+                    return .query(.pe);
+                },
+                'c' => {
+                    self.state = .begin;
+                    return .query(.da);
+                },
+                else => {
+                    log.err("question_mark: invalid character {x:02}", .{c});
                     return .err;
                 },
             }
