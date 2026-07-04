@@ -1,5 +1,6 @@
 /.zig-cache
 /zig-out
 
+err.log
 .DS_Store
 
