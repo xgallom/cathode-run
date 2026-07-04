@@ -17,6 +17,7 @@ pub fn build(b: *std.Build) void {
         .imports = &.{
             .{ .name = "core", .module = core },
         },
+        .link_libc = true,
     });
 
     const check_term = b.addExecutable(.{
@@ -44,5 +45,11 @@ pub fn build(b: *std.Build) void {
         run_cmd.addArgs(args);
     }
 
-    // const test_step = b.step("test", "Run tests");
+    const mod_tests = b.addTest(.{
+        .root_module = core,
+    });
+    const run_mod_tests = b.addRunArtifact(mod_tests);
+
+    const test_step = b.step("test", "Run tests");
+    test_step.dependOn(&run_mod_tests.step);
 }

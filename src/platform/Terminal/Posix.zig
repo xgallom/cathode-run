@@ -9,6 +9,7 @@ const log = std.log.scoped(.platform);
 const Allocator = std.mem.Allocator;
 
 const c = @cImport({
+    @cInclude("stdlib.h");
     @cInclude("stdio.h");
     @cInclude("sys/ioctl.h");
     @cInclude("sys/random.h");
@@ -54,20 +55,20 @@ pub fn getWinSize() !game.Point.U {
 
 pub fn getNow(self: *@This()) !u64 {
     _ = self;
-    var ts: c.timespec = undefined;
-    switch (errno(c.clock_gettime(c.CLOCK_MONOTONIC, &ts))) {
+    var ts: std.c.timespec = undefined;
+    switch (errno(std.c.clock_gettime(std.c.clockid_t.MONOTONIC, &ts))) {
         .SUCCESS => {},
         else => |err| {
             log.err("clock gettime failed: {t}", .{err});
             return error.ClockGetTimeFailed;
         },
     }
-    return unit.s(@intCast(ts.tv_sec)).toNs() + @as(u64, @intCast(ts.tv_nsec));
+    return unit.s(@intCast(ts.sec)).toNs() + @as(u64, @intCast(ts.nsec));
 }
 
 pub fn sleepNs(ns: u64) !void {
-    var ts: c.timespec = .{ .tv_sec = 0, .tv_nsec = @intCast(ns) };
-    switch (errno(c.nanosleep(&ts, null))) {
+    var ts: std.c.timespec = .{ .sec = 0, .nsec = @intCast(ns) };
+    switch (errno(std.c.nanosleep(&ts, null))) {
         .SUCCESS => {},
         else => |err| {
             log.err("nanosleep failed: {t}", .{err});
@@ -76,7 +77,7 @@ pub fn sleepNs(ns: u64) !void {
     }
 }
 
-pub fn randomBytes(buf: []u8) void {
+pub fn randomBytes(buf: []u8) !void {
     if (@hasDecl(c, "arc4random_buf")) {
         c.arc4random_buf(buf.ptr, buf.len);
     } else if (@hasDecl(c, "getrandom")) {
@@ -101,15 +102,15 @@ pub fn readInput(self: *@This(), buf: []core.InputResult) !bool {
 pub fn write(self: *const @This(), buf: []const u8) !void {
     _ = self;
     if (buf.len == 0) return;
-    if (c.fwrite(buf.ptr, buf.len, 1, c.stdout()) != 1) {
+    if (c.fwrite(buf.ptr, buf.len, 1, stdout()) != 1) {
         return error.WriteFailed;
     }
-    if (c.fflush(c.stdout()) != 0) return error.FlushFailed;
+    if (c.fflush(stdout()) != 0) return error.FlushFailed;
 }
 
 fn setVBuf(self: *const @This(), buf: []u8) !void {
     _ = self;
-    switch (errno(c.setvbuf(c.stdout(), buf.ptr, c._IOFBF, buf.len))) {
+    switch (errno(c.setvbuf(stdout(), buf.ptr, c._IOFBF, buf.len))) {
         .SUCCESS => {},
         else => |err| {
             log.err("setvbuf failed: {t}", .{err});
@@ -184,6 +185,12 @@ fn disableRawMode(self: *const @This()) !void {
         },
     }
     try self.write(static.ansi.cur_show ++ static.ansi.kbd_raw_end);
+}
+
+fn stdout() *c.FILE {
+    if (@typeInfo(@TypeOf(c.stdout)) == .@"fn") {
+        return c.stdout();
+    } else return c.stdout.?;
 }
 
 // WARN: This seems awfully hacky, check when porting

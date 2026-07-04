@@ -22,12 +22,13 @@ pub const Options = struct {
     allow_level_skip: ?bool = null,
     input_buf_length: usize = 33,
 };
+
 pub const cathode_run_options: Options = .{
     // .output_symbol_table = true,
     // .wide_gap = true,
     // .slow = true,
-    .random_seed = false,
-    .allow_level_skip = true,
+    // .random_seed = false,
+    // .allow_level_skip = true,
 };
 
 pub const std_options: std.Options = .{
@@ -77,7 +78,7 @@ pub const Frame = struct {
     duration: u64 = undefined,
 
     pub fn init(gpa: Allocator, win_size: game.Point.U) !@This() {
-        const win_area = win_size.area();
+        const win_area: usize = @intCast(win_size.area());
         const syms = try gpa.alloc(u8, win_area);
         errdefer gpa.free(syms);
         const attrs = try gpa.alloc(game.CellAttr, win_area);
@@ -197,10 +198,6 @@ pub fn update(self: *GameState) !game.SessionState {
         .running => return try updateRunning(self),
         .paused => unreachable,
         .died, .quit => return try updateScore(self),
-        // self.session.state = switch (self.session.state) {
-        //     .quit => .end,
-        //     else => .init,
-        // };
         .end => return .end,
     }
 }
@@ -208,7 +205,6 @@ pub fn update(self: *GameState) !game.SessionState {
 pub fn render(self: *GameState, frame: *const Frame) !void {
     switch (self.session.state) {
         .start => frame.write(static.txt.start, static.clr.default, 0),
-
         .init => {},
         .intro => drawIntro(self, frame),
         .running => try drawRunning(self, frame),
@@ -236,7 +232,6 @@ pub fn sleep(self: *GameState) u64 {
 }
 
 fn consumeInputs(self: *GameState) !game.SessionState {
-    // const input_len = platform.getInput(&storage.input_buf);
     var input_len: usize = 0;
     for (self.input_buf) |input| {
         switch (input.event) {
@@ -470,7 +465,6 @@ fn drawIntro(self: *GameState, frame: *const Frame) void {
                 @intCast(int.idx2D(height_full - 2, 1, sizei.x)),
             );
             len = @intFromFloat(@round(param.lerp(0, score.len + score_num.len, param.sat(t - 1))));
-            log.info("{} {}", .{ score.len, len });
             frame.write(
                 score[0..@min(score.len, @as(u32, @intCast(len)))],
                 clr.txts[0],
@@ -661,7 +655,7 @@ pub const GameState = struct {
         errdefer gpa.destroy(session);
         var scratch: Scratch = try .init(gpa);
         errdefer scratch.deinit(gpa);
-        const sym_map = try gpa.alloc(u8, session.size.area());
+        const sym_map = try gpa.alloc(u8, @intCast(session.size.area()));
         errdefer gpa.free(sym_map);
         const road_left = try gpa.alloc(u32, session.size.y);
         errdefer gpa.free(road_left);
@@ -908,7 +902,7 @@ pub const GameState = struct {
     }
 
     fn symMap(self: *const @This()) []u8 {
-        return self.sym_map[0..self.session.size.area()];
+        return self.sym_map[0..@intCast(self.session.size.area())];
     }
 
     fn roadLeft(self: *const @This()) []u32 {

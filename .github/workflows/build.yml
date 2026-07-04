@@ -30,7 +30,7 @@ jobs:
       matrix:
         include:
           - target: x86-linux-musl
-            cpu: x86_v2
+            cpu: x86_64_v2
             os: ubuntu-latest
             archive: cathode-run-linux-x86.tar.gz
 
@@ -40,7 +40,7 @@ jobs:
             archive: cathode-run-linux-x86_64.tar.gz
 
           - target: x86-windows
-            cpu: x86_v2
+            cpu: x86_64_v2
             os: windows-latest
             archive: cathode-run-windows-x86.zip
 
@@ -51,17 +51,23 @@ jobs:
 
           - target: aarch64-macos
             cpu: baseline
-            os: macos-latest
+            os: macos-26
             archive: cathode-run-macos-aarch64.tar.gz
 
     steps:
       - name: Checkout
         uses: actions/checkout@v7
 
+      - name: Select XCode
+        if: runner.os == 'macOS'
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: '26.3'
+
       - name: Install Zig
         uses: mlugg/setup-zig@v2
         with:
-          version: 0.16.0
+          version: 0.15.2
           cache-key: ${{ matrix.os }}-0.16.0
 
       - name: Build

@@ -26,7 +26,7 @@ pub const score = struct {
 
 pub const delay = struct {
     pub const start = unit.s(1).v;
-    pub const step = unit.us(33333).v;
+    pub const step = unit.us(16667).v;
 
     pub const intro = unit.s(10).v;
     pub const intro_in = unit.ms(1000).v;

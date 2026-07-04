@@ -79,7 +79,7 @@ pub fn teardown(self: *@This()) !void {
 pub fn reset(self: *@This(), session: *game.Session) !void {
     _ = self;
     if (options.random_seed orelse !options.debug) {
-        Impl.randomBuf(std.mem.asBytes(&session.seed));
+        try Impl.randomBytes(std.mem.asBytes(&session.seed));
     } else {
         session.seed = 0;
     }
@@ -102,7 +102,6 @@ pub fn renderFull(self: *@This(), frame: *core.Frame) !void {
         const end = for (start..frame.syms.len) |n| {
             if (frame.attrs[n] != frame.attrs[start]) break n;
         } else frame.syms.len;
-        log.info("{} - {}: {f} {s}", .{ start, end, frame.attrs[start], frame.syms[start..end] });
         try self.txt.write(static.ansi.attr(frame.attrs[start]));
         try self.txt.writeSyms(frame.syms[start..end]);
         i.add(end - i.idx, self.win_size.x);

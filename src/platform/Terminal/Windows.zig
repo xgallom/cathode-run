@@ -133,7 +133,7 @@ pub fn sleepNs(ns: u64) !void {
     }
 }
 
-pub fn randomBytes(buf: []u8) void {
+pub fn randomBytes(buf: []u8) !void {
     const status = BCryptGenRandom(null, buf.ptr, @intCast(buf.len), BCRYPT_USE_SYSTEM_PREFERRED_RNG);
     if (status != .SUCCESS) {
         std.process.fatal("random bytes failed: {t}", .{status});
