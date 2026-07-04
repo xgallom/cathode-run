@@ -14,10 +14,12 @@ const static = core.static;
 const unit = core.unit;
 const Txt = core.Txt;
 
-output_mode: u32 = undefined,
 input_mode: u32 = undefined,
-output: windows.HANDLE = undefined,
+output_mode: u32 = undefined,
 input: windows.HANDLE = undefined,
+output: windows.HANDLE = undefined,
+input_cp: windows.UINT = undefined,
+output_cp: windows.UINT = undefined,
 pc_freq: u64 = 0,
 event_buf: [options.input_buf_length - 1]INPUT_RECORD = undefined,
 
@@ -41,6 +43,8 @@ const ENABLE_WINDOW_INPUT: u32 = 0x0008;
 const ENABLE_VIRTUAL_TERMINAL_INPUT: u32 = 0x0200;
 
 const CONSOLE_READ_NOWAIT: windows.USHORT = 0x0002;
+
+const CP_UTF8: windows.UINT = 65001;
 
 const BCRYPT_RNG_USE_ENTROPY_IN_BUFFER = 0x00000001;
 const BCRYPT_USE_SYSTEM_PREFERRED_RNG = 0x00000002;
@@ -69,6 +73,11 @@ extern "ntdll" fn NtDelayExecution(
     DelayInterval: *const windows.LARGE_INTEGER,
 ) callconv(.winapi) windows.NTSTATUS;
 
+extern "kernel32" fn GetConsoleCP() callconv(.winapi) windows.UINT;
+extern "kernel32" fn GetConsoleOutputCP() callconv(.winapi) windows.UINT;
+extern "kernel32" fn SetConsoleCP(wCodePageID: windows.UINT) callconv(.winapi) windows.BOOL;
+extern "kernel32" fn SetConsoleOutputCP(wCodePageID: windows.UINT) callconv(.winapi) windows.BOOL;
+
 extern "kernel32" fn GetNumberOfConsoleInputEvents(
     hConsoleInput: windows.HANDLE,
     lpcNumberOfEvents: *windows.DWORD,
@@ -91,6 +100,7 @@ extern "bcrypt" fn BCryptGenRandom(
 pub fn setup(self: *@This(), stdout_buf: []u8) !void {
     _ = stdout_buf;
     try self.initPerformanceCounter();
+    try self.setCodePages();
     try self.enableAnsiSequences();
     try self.write(static.ansi.alt_scr_buf ++ static.ansi.cls);
     try self.enableRawMode();
@@ -100,6 +110,7 @@ pub fn teardown(self: *@This()) !void {
     try self.disableRawMode();
     try self.write(static.ansi.cls ++ static.ansi.alt_scr_buf_end);
     try self.disableAnsiSequences();
+    try self.restoreCodePages();
 }
 
 pub fn getWinSize() !game.Point.U {
@@ -241,4 +252,36 @@ fn disableRawMode(self: *const @This()) !void {
         return error.SetConsoleModeFailed;
     }
     try self.write(static.ansi.cur_show);
+}
+
+fn setCodePages(self: *@This()) !void {
+    self.input_cp = GetConsoleCP();
+    if (self.input_cp == 0) {
+        log.err("failed obtaining console code page", .{});
+        return error.GetConsoleCPFailed;
+    }
+    self.output_cp = GetConsoleCP();
+    if (self.output_cp == 0) {
+        log.err("failed obtaining console output code page", .{});
+        return error.GetConsoleCPFailed;
+    }
+    if (SetConsoleCP(CP_UTF8) == windows.FALSE) {
+        log.err("failed setting console code page", .{});
+        return error.SetConsoleCPFailed;
+    }
+    if (SetConsoleOutputCP(CP_UTF8) == windows.FALSE) {
+        log.err("failed setting console output code page", .{});
+        return error.SetConsoleCPFailed;
+    }
+}
+
+fn restoreCodePages(self: *const @This()) !void {
+    if (SetConsoleCP(self.input_cp) == windows.FALSE) {
+        log.err("failed setting console code page", .{});
+        return error.SetConsoleCPFailed;
+    }
+    if (SetConsoleOutputCP(self.output_cp) == windows.FALSE) {
+        log.err("failed setting console output code page", .{});
+        return error.SetConsoleCPFailed;
+    }
 }

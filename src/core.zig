@@ -878,7 +878,7 @@ pub const GameState = struct {
             const path = self.path;
             const wave = path.amp1 * int.sin(Q(10).mod(Q(10).round(score * path.p1))) +
                 path.amp2 * int.cos(Q(10).mod(Q(10).round(score * path.p2)));
-            const offset = Q(20).round(wave * @divTrunc(self.session.size.i().x, 4));
+            const offset = Q(20).round(wave * 25);
             const center = @divTrunc(self.session.size.i().x, 2) + offset;
             const jitter = prng_r.range(-1, 1);
             const gap_pos = center - @divTrunc(gap_width - @as(i32, @intCast(skew)), 2) + jitter;
