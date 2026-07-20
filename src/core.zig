@@ -33,7 +33,7 @@ pub const cathode_run_options: Options = .{
     // .output_symbol_table = true,
     // .wide_gap = true,
     // .slow = true,
-    .random_seed = false,
+    // .random_seed = false,
     .allow_level_skip = true,
 };
 

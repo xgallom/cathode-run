@@ -49,7 +49,7 @@ jobs:
             os: windows-latest
             archive: cathode-run-windows-x86_64.zip
 
-          - target: aarch64-macos
+          - target: native
             cpu: baseline
             os: macos-26
             archive: cathode-run-macos-aarch64.tar.gz
@@ -68,21 +68,26 @@ jobs:
         uses: mlugg/setup-zig@v2
         with:
           version: 0.15.2
-          cache-key: ${{ matrix.os }}-0.16.0
+          cache-key: ${{ matrix.os }}-0.15.2
 
-      - name: Build
+      - name: Build (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: zig build -Dtarget=${{ matrix.target }} -Dcpu=${{ matrix.cpu }} -Doptimize=ReleaseFast
+
+      - name: Build (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
         run: zig build -Dtarget=${{ matrix.target }} -Dcpu=${{ matrix.cpu }} -Doptimize=ReleaseFast
 
       - name: Package SDK Architecture (Unix)
         if: runner.os != 'Windows'
+        shell: bash
         run: |
           mkdir -p staging/bin
-          # mkdir -p staging/lib
 
           cp zig-out/bin/cathode-run staging/bin/cathode-run
-          # cp ${{ matrix.lib_src }} staging/lib/$(basename ${{ matrix.lib_src }})
-          # cp -rf zig-out/include staging/include
-          # cp -rf zig-out/share staging/share
+          cp -r zig-out/assets staging/assets
 
           chmod +x staging/bin/cathode-run
 
@@ -94,10 +99,10 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path staging/bin
-          # New-Item -ItemType Directory -Force -Path staging/share
+          New-Item -ItemType Directory -Force -Path staging/assets
 
           Copy-Item "zig-out/bin/cathode-run.exe" -Destination "staging/bin/cathode-run.exe"
-          # Copy-Item "zig-out/share/*" -Destination "staging/share" -Recurse -Force
+          Copy-Item "zig-out/assets/*" -Destination "staging/assets" -Recurse -Force
 
           New-Item -ItemType Directory -Force -Path dist
           Compress-Archive -Path staging/* -DestinationPath "dist/${{ matrix.archive }}"

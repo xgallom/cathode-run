@@ -29,6 +29,13 @@ pub fn build(b: *std.Build) void {
     term_mod.addCSourceFile(.{ .file = b.path("vendor/miniaudio/miniaudio.c") });
     term_mod.addIncludePath(b.path("vendor/miniaudio"));
 
+    if (target.result.os.tag == .macos) {
+        term_mod.linkFramework("CoreAudio", .{ .needed = true });
+        term_mod.linkFramework("CoreFoundation", .{});
+        term_mod.linkFramework("AudioUnit", .{});
+        term_mod.linkFramework("AudioToolbox", .{});
+    }
+
     const check_term = b.addExecutable(.{
         .name = "cathode-run",
         .root_module = term_mod,
