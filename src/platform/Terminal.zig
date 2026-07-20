@@ -14,6 +14,9 @@ const static = core.static;
 const unit = core.unit;
 const Txt = core.Txt;
 
+const Audio = @import("Terminal/Audio.zig");
+
+audio: Audio,
 txt: Txt,
 stdout_buf: [*]u8,
 win_size: game.Point.U,
@@ -50,11 +53,14 @@ const RenderIndexer = struct {
 };
 
 pub fn init(gpa: Allocator) !@This() {
+    var audio = try Audio.init(gpa);
+    errdefer audio.deinit(gpa);
     var txt = try Txt.init(gpa, .MB(1));
     errdefer txt.deinit(gpa);
     const stdout_buf = try stdout_buf_len.alloc(gpa);
     errdefer gpa.free(stdout_buf);
     return .{
+        .audio = audio,
         .txt = txt,
         .stdout_buf = stdout_buf.ptr,
         .win_size = try Impl.getWinSize(),
@@ -62,14 +68,15 @@ pub fn init(gpa: Allocator) !@This() {
 }
 
 pub fn deinit(self: *@This(), gpa: Allocator) void {
+    self.audio.deinit(gpa);
     self.txt.deinit(gpa);
     stdout_buf_len.free(gpa, self.stdout_buf);
     self.* = undefined;
 }
 
 pub fn setup(self: *@This()) !void {
-    self.last_frame = try self.impl.getNow();
     try self.impl.setup(self.stdout_buf[0..stdout_buf_len.v]);
+    self.last_frame = try self.impl.getNow();
 }
 
 pub fn teardown(self: *@This()) !void {
@@ -84,6 +91,11 @@ pub fn reset(self: *@This(), session: *game.Session) !void {
         session.seed = 0;
     }
     log.info("reset seed: {x:016}", .{session.seed});
+}
+
+pub fn playSound(self: *@This(), path: [:0]const u8) !void {
+    log.debug("playing sample: {s}", .{path});
+    try self.audio.playSound(path);
 }
 
 pub fn getInput(self: *@This(), buf: []core.InputResult) !bool {

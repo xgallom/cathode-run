@@ -3,15 +3,35 @@ const options = root.cathode_run_options;
 const game = @import("game.zig");
 const unit = @import("unit.zig");
 
+pub const asset = struct {
+    pub const music = struct {
+        pub const levels = [_][]const u8{
+            "level_0.mp3",
+            "level_1.mp3",
+            "level_2.mp3",
+        };
+        pub const menu = "menu.mp3";
+    };
+    pub const sample = struct {
+        pub const activate = "activate.wav";
+        pub const explosion = "explosion.wav";
+        pub const woosh = "woosh.wav";
+        pub const engine_idle = "engine_idle.wav";
+        pub const engine_x = "engine_x.wav";
+        pub const engine_y = "engine_y.wav";
+    };
+};
+
 pub const gap_width = struct {
     pub const max = 64;
-    pub const min = if (options.wide_gap orelse options.debug) 32 else 20;
+    pub const min = if (options.wide_gap orelse options.debug) 32 else 16;
 };
 
 pub const score = struct {
     pub const level_1 = 3333;
     pub const level_2 = 6666;
-    pub const won_game = 9999;
+    pub const level_3 = 9999;
+    pub const won_game = 10000;
 
     pub const gap_width_end = 3333;
     pub const running_delay_end = 6666;
@@ -19,6 +39,7 @@ pub const score = struct {
     pub fn level(score_v: u64) u32 {
         var acc: u32 = @intFromBool(score_v >= level_1);
         acc += @intFromBool(score_v >= level_2);
+        acc += @intFromBool(score_v >= level_3);
         acc += @intFromBool(score_v >= won_game);
         return acc;
     }
@@ -32,9 +53,13 @@ pub const delay = struct {
     pub const intro_in = unit.ms(1000).v;
     pub const intro_out = unit.ms(1000).v;
     pub const intro_out_0 = intro - intro_out;
+    pub const intro_out_sound = unit.ms(750).v;
+    pub const intro_out_sound_0 = intro - intro_out_sound;
 
-    pub const running_max = unit.us(66666).v;
-    pub const running_min = unit.us(22222).v;
+    pub const running_slow_max = unit.us(66668).v;
+    pub const running_slow_min = unit.us(66668).v;
+    pub const running_max = unit.us(66668).v;
+    pub const running_min = unit.us(33334).v;
 
     pub const score = unit.s(10).v;
     pub const score_in = unit.ms(1000).v;
@@ -92,32 +117,45 @@ pub const clr = struct {
         .{ .bg = C.one(.red), .fg = C.many(&.{ .red, .bold }) },
         .{ .bg = C.one(.green), .fg = C.many(&.{ .green, .bold }) },
         .{ .bg = C.one(.blue), .fg = C.many(&.{ .green, .blue }) },
-        .{ .bg = C.one(.bold), .fg = C.many(&.{ .red, .green, .blue, .bold }) },
+        .{ .bg = C.many(&.{ .red, .green, .blue, .bold }), .fg = C.none },
+        .{ .bg = C.none, .fg = C.many(&.{ .red, .green, .blue, .bold }) },
     };
     pub const gnds = [_]game.CellAttr{
         .{ .fg = C.many(&.{ .red, .green, .bold }) },
         .{ .fg = C.many(&.{ .green, .blue, .bold }) },
         .{ .fg = C.many(&.{ .red, .blue, .bold }) },
+        .{ .bg = C.many(&.{ .red, .blue, .bold }), .fg = C.many(&.{ .red, .green, .blue, .bold }) },
         .{ .fg = C.many(&.{ .red, .green, .blue, .bold }) },
+    };
+    pub const bgs = [_]game.CellAttr{
+        .{ .fg = C.many(&.{ .red, .green }) },
+        .{ .fg = C.many(&.{ .green, .blue }) },
+        .{ .fg = C.many(&.{ .red, .blue }) },
+        .{ .bg = C.many(&.{ .red, .blue, .bold }), .fg = C.many(&.{ .red, .green, .blue, .bold }) },
+        .{ .fg = C.many(&.{ .red, .green, .blue }) },
     };
     pub const txts = [_]game.CellAttr{
         .{ .fg = C.many(&.{ .red, .bold }) },
         .{ .fg = C.many(&.{ .green, .bold }) },
         .{ .fg = C.many(&.{ .blue, .bold }) },
-        .{ .fg = C.many(&.{ .blue, .bold }) },
+        .{ .fg = C.many(&.{ .red, .blue, .bold }) },
+        .{ .fg = C.many(&.{ .red, .green, .blue, .bold }) },
     };
     pub const score_nums = [_]game.CellAttr{
         .{ .fg = C.many(&.{ .red, .green, .bold }) },
         .{ .fg = C.many(&.{ .blue, .bold }) },
         .{ .fg = C.many(&.{ .green, .blue, .bold }) },
-        .{ .fg = C.many(&.{ .green, .blue, .bold }) },
+        .{ .fg = C.many(&.{ .red, .green, .blue, .bold }) },
+        .{ .fg = C.many(&.{ .red, .green, .blue, .bold }) },
     };
     pub const msgs_scores = [_]game.CellAttr{
-        .{ .fg = C.many(&.{ .red, .bold }) },
-        .{ .fg = C.many(&.{ .green, .bold }) },
-        .{ .fg = C.many(&.{ .blue, .bold }) },
+        .{ .bg = C.none, .fg = C.many(&.{ .red, .bold }) },
+        .{ .bg = C.none, .fg = C.many(&.{ .green, .bold }) },
         .{ .bg = C.one(.blue), .fg = C.many(&.{ .green, .blue, .bold }) },
+        .{ .bg = C.many(&.{ .red, .green, .blue, .bold }), .fg = C.none },
+        .{ .bg = C.many(&.{ .red, .green, .blue, .bold }), .fg = C.none },
     };
+    pub const msgs_scores_quit: game.CellAttr = .{ .fg = C.many(&.{ .red, .bold }) };
 };
 
 pub const sym = struct {
@@ -125,6 +163,7 @@ pub const sym = struct {
     pub const gnd = ' ';
     pub const player = 0xE9;
     pub const void_stone = 0xF8;
+    pub const void_pebble = 0xF9;
     pub const blocks = [_]u8{
         gnd,
         0xB0,
@@ -187,17 +226,20 @@ pub const txt = struct {
         "She was only trouble, but you knew that from the start...",
         "Now all you see at night is her face...",
         "You know in your heart forgetting her is impossible.",
+        "You know in your heart forgetting her is impossible.",
     };
     pub const msgs_score = [_][]const u8{
         "Will you keep trying? Better than dying forgotten...",
         "You keep trying. That's all that matters.",
         "Just keep trying. Let the chips fall where they may.",
+        "And so you flew so close to the sun, you could almost touch it and burn.",
         "You may yet live to see a different life, free of their ever-present hunt.",
     };
     pub const msg_quit = "With this character's death, the thread of fate is severed.";
     pub const score = "SYSTEM ONLINE // SCORE: ";
     pub const score_num = "0000";
     pub const scores = [_][2][]const u8{
+        .{ score_lost, "" },
         .{ score_lost, "" },
         .{ score_lost, "" },
         .{ score_lost, "" },
@@ -253,11 +295,11 @@ pub const txt = struct {
 };
 
 pub const key = struct {
-    pub const up = [_]u8{ 'w', 'k' };
-    pub const right = [_]u8{ 'd', 'l' };
-    pub const down = [_]u8{ 's', 'j' };
-    pub const left = [_]u8{ 'a', 'h' };
-    pub const quit = 'q';
-    pub const dbg_prev_lvl = '[';
-    pub const db_next_lvl = ']';
+    pub const up = [_]u8{ 'w', 'k', 'W', 'K' };
+    pub const right = [_]u8{ 'd', 'l', 'D', 'L' };
+    pub const down = [_]u8{ 's', 'j', 'S', 'J' };
+    pub const left = [_]u8{ 'a', 'h', 'A', 'H' };
+    pub const quit = [_]u8{ 'q', 'Q' };
+    pub const dbg_prev_lvl = [_]u8{'['};
+    pub const db_next_lvl = [_]u8{']'};
 };

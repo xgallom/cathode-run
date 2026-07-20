@@ -20,32 +20,39 @@ pub const Options = struct {
     wide_gap: ?bool = null,
     random_seed: ?bool = null,
     allow_level_skip: ?bool = null,
+    entity_capacity: usize = unit.KB(64).v,
     input_buf_length: usize = 33,
+    sample_queue_length: usize = 32,
+    music_queue_length: usize = 4,
+    music_fade_in_ms: u64 = 250,
+    movement_fade_in_ms: u64 = 67,
+    movement_fade_out_ms: u64 = 150,
 };
 
 pub const cathode_run_options: Options = .{
     // .output_symbol_table = true,
     // .wide_gap = true,
     // .slow = true,
-    // .random_seed = false,
-    // .allow_level_skip = true,
+    .random_seed = false,
+    .allow_level_skip = true,
 };
 
 pub const std_options: std.Options = .{
     .log_scope_levels = &.{
-        .{ .scope = .core, .level = .warn },
-        .{ .scope = .cp437, .level = .warn },
-        .{ .scope = .game, .level = .warn },
-        .{ .scope = .int, .level = .warn },
-        .{ .scope = .main, .level = .warn },
-        .{ .scope = .platform, .level = .warn },
-        .{ .scope = .param, .level = .warn },
-        .{ .scope = .prng, .level = .warn },
-        .{ .scope = .read, .level = .warn },
-        .{ .scope = .scratch, .level = .warn },
-        .{ .scope = .static, .level = .warn },
-        .{ .scope = .txt, .level = .warn },
-        .{ .scope = .unit, .level = .warn },
+        .{ .scope = .audio, .level = .info },
+        .{ .scope = .core, .level = .debug },
+        .{ .scope = .cp437, .level = .info },
+        .{ .scope = .game, .level = .info },
+        .{ .scope = .int, .level = .info },
+        .{ .scope = .main, .level = .info },
+        .{ .scope = .platform, .level = .info },
+        .{ .scope = .param, .level = .info },
+        .{ .scope = .prng, .level = .info },
+        .{ .scope = .read, .level = .info },
+        .{ .scope = .scratch, .level = .info },
+        .{ .scope = .static, .level = .info },
+        .{ .scope = .txt, .level = .info },
+        .{ .scope = .unit, .level = .info },
     },
 };
 
@@ -78,9 +85,15 @@ pub const InputResult = struct {
         return .{ .event = .query, .keycode = @intFromEnum(query_type) };
     }
 
-    pub fn querytype(self: @This()) QueryType {
+    pub fn queryType(self: @This()) QueryType {
         assert(self.event == .query);
         return @enumFromInt(self.keycode);
+    }
+
+    pub fn isKey(self: @This(), keys: []const u8) bool {
+        return for (keys) |key| {
+            if (key == self.keycode) break true;
+        } else false;
     }
 };
 
@@ -114,13 +127,34 @@ pub const Frame = struct {
         @memset(self.attrs, .none);
     }
 
+    pub fn set(
+        self: *const @This(),
+        sym: u8,
+        attr: game.CellAttr,
+        idx: usize,
+    ) void {
+        assert(idx < self.syms.len);
+        assert(self.syms.len == self.attrs.len);
+        self.syms[idx] = sym;
+        self.attrs[idx] = attr;
+    }
+
+    pub fn setSym(
+        self: *const @This(),
+        sym: u8,
+        idx: usize,
+    ) void {
+        assert(idx < self.syms.len);
+        self.syms[idx] = sym;
+    }
+
     pub fn write(
         self: *const @This(),
         syms: []const u8,
         attr: game.CellAttr,
         idx: usize,
     ) void {
-        assert(self.syms.len >= idx + syms.len);
+        assert(idx + syms.len <= self.syms.len);
         assert(self.syms.len == self.attrs.len);
         @memcpy(self.syms[idx .. idx + syms.len], syms);
         @memset(self.attrs[idx .. idx + syms.len], attr);
@@ -133,7 +167,7 @@ pub const Frame = struct {
         attr: game.CellAttr,
         idx: usize,
     ) void {
-        assert(self.syms.len >= idx + len);
+        assert(idx + len <= self.syms.len);
         assert(self.syms.len == self.attrs.len);
         @memset(self.syms[idx .. idx + len], sym);
         @memset(self.attrs[idx .. idx + len], attr);
@@ -141,10 +175,14 @@ pub const Frame = struct {
 };
 
 pub const UIState = enum {
+    not_first_start,
     quit,
     skip,
     key_down,
     waiting_release,
+    waiting_sound,
+    sound_engine_x_on,
+    sound_engine_y_on,
 
     const flags = int.Flags(@This());
     pub const Flags = flags.U;
@@ -170,6 +208,10 @@ pub fn transfer(self: *GameState, to: game.SessionState) !game.SessionState {
         .start => unreachable,
         .init => {
             self.session.reset();
+            if (!int.flag.has(self.ui.state, UIState.one(.not_first_start))) {
+                try self.music_queue.appendBounded(static.asset.music.menu);
+                int.flag.set(&self.ui.state, UIState.one(.not_first_start));
+            }
             return .init;
         },
         .intro => {
@@ -179,6 +221,7 @@ pub fn transfer(self: *GameState, to: game.SessionState) !game.SessionState {
             } else {
                 int.flag.clr(&self.ui.state, UIState.one(.waiting_release));
             }
+            int.flag.set(&self.ui.state, UIState.one(.waiting_sound));
             self.ui.delay = 0;
             self.session.state = .intro;
             return .intro;
@@ -186,6 +229,8 @@ pub fn transfer(self: *GameState, to: game.SessionState) !game.SessionState {
         .running => {
             self.ui.input = game.Dir.none;
             self.session.state = .running;
+            try self.sample_queue.appendBounded(.{ .start = static.asset.sample.engine_idle });
+            try self.music_queue.appendBounded(static.asset.music.levels[0]);
             return .running;
         },
         .paused => unreachable,
@@ -197,10 +242,19 @@ pub fn transfer(self: *GameState, to: game.SessionState) !game.SessionState {
             }
             self.ui.delay = 0;
             self.session.state = state;
+            try self.sample_queue.appendBounded(.{ .stop = static.asset.sample.engine_idle });
+            try self.sample_queue.appendBounded(.{ .stop = static.asset.sample.engine_x });
+            try self.sample_queue.appendBounded(.{ .stop = static.asset.sample.engine_y });
+            int.flag.clr(
+                &self.ui.state,
+                UIState.many(&.{ .sound_engine_x_on, .sound_engine_y_on }),
+            );
+            try self.music_queue.appendBounded(static.asset.music.menu);
             return state;
         },
         .end => {
             self.session.state = .end;
+            try self.music_queue.appendBounded(null);
             return .end;
         },
     }
@@ -238,8 +292,14 @@ pub fn sleep(self: *GameState) u64 {
             self.session.score,
             0,
             static.score.running_delay_end,
-            static.delay.running_max,
-            static.delay.running_min,
+            if (cathode_run_options.slow)
+                static.delay.running_slow_max
+            else
+                static.delay.running_max,
+            if (cathode_run_options.slow)
+                static.delay.running_slow_min
+            else
+                static.delay.running_min,
         ),
         .intro, .died, .quit => self.ui.delay += static.delay.step,
         else => {},
@@ -273,7 +333,7 @@ fn updateIntro(self: *GameState) !game.SessionState {
         .down => int.flag.set(&self.ui.state, UIState.one(.key_down)),
         .up => if (input.keycode != '\r') {
             if (!int.flag.has(self.ui.state, UIState.one(.waiting_release))) {
-                if (input.keycode == static.key.quit) {
+                if (input.isKey(&static.key.quit)) {
                     if (int.flag.has(self.ui.state, UIState.one(.quit))) {
                         return .end;
                     } else {
@@ -283,6 +343,7 @@ fn updateIntro(self: *GameState) !game.SessionState {
                 int.flag.set(&self.ui.state, UIState.one(.skip));
             }
             int.flag.clr(&self.ui.state, UIState.many(&.{ .key_down, .waiting_release }));
+            try self.sample_queue.appendBounded(.{ .start = static.asset.sample.activate });
         },
         .query => {},
     };
@@ -294,107 +355,143 @@ fn updateIntro(self: *GameState) !game.SessionState {
         int.flag.clr(&self.ui.state, UIState.one(.skip));
     }
 
+    if (self.ui.delay > static.delay.intro_out_sound_0 and
+        int.flag.has(self.ui.state, UIState.one(.waiting_sound)))
+    {
+        if (!int.flag.has(self.ui.state, UIState.one(.quit))) {
+            try self.sample_queue.appendBounded(.{ .start = static.asset.sample.woosh });
+        }
+        int.flag.clr(&self.ui.state, UIState.one(.waiting_sound));
+    }
+
     return .intro;
 }
 
 const allow_level_skip = cathode_run_options.allow_level_skip orelse cathode_run_options.debug;
 fn updateRunning(self: *GameState) !game.SessionState {
     self.session.score += 1;
-    if (self.session.score -| self.session.player_pos.u().y >= static.score.won_game) {
-        return .died;
-    }
     var score = self.session.score;
 
     for (self.input_buf, 0..) |input, n| switch (input.event) {
         .none => if (n == self.input_buf.len - 1) return error.InputBufferOverflow else break,
         .err => return error.InputFailed,
-        .down => switch (input.keycode) {
-            static.key.up[0], static.key.up[1] => int.flag.set(
-                &self.ui.input,
-                game.Dir.one(.up),
-            ),
-            static.key.right[0], static.key.right[1] => int.flag.set(
-                &self.ui.input,
-                game.Dir.one(.right),
-            ),
-            static.key.down[0], static.key.down[1] => int.flag.set(
-                &self.ui.input,
-                game.Dir.one(.down),
-            ),
-            static.key.left[0], static.key.left[1] => int.flag.set(
-                &self.ui.input,
-                game.Dir.one(.left),
-            ),
-            else => {},
-        },
-        .up => switch (input.keycode) {
-            static.key.up[0], static.key.up[1] => int.flag.clr(
-                &self.ui.input,
-                game.Dir.one(.up),
-            ),
-            static.key.right[0], static.key.right[1] => int.flag.clr(
-                &self.ui.input,
-                game.Dir.one(.right),
-            ),
-            static.key.down[0], static.key.down[1] => int.flag.clr(
-                &self.ui.input,
-                game.Dir.one(.down),
-            ),
-            static.key.left[0], static.key.left[1] => int.flag.clr(
-                &self.ui.input,
-                game.Dir.one(.left),
-            ),
-            static.key.quit => {
-                // TODO: Animation
-                int.flag.set(&self.ui.state, UIState.one(.quit));
-                return .quit;
-            },
-            static.key.dbg_prev_lvl => if (comptime allow_level_skip) {
+        .down => if (input.isKey(&static.key.up)) int.flag.set(
+            &self.ui.input,
+            game.Dir.one(.up),
+        ) else if (input.isKey(&static.key.right)) int.flag.set(
+            &self.ui.input,
+            game.Dir.one(.right),
+        ) else if (input.isKey(&static.key.down)) int.flag.set(
+            &self.ui.input,
+            game.Dir.one(.down),
+        ) else if (input.isKey(&static.key.left)) int.flag.set(
+            &self.ui.input,
+            game.Dir.one(.left),
+        ),
+        .up => if (input.isKey(&static.key.up)) int.flag.clr(
+            &self.ui.input,
+            game.Dir.one(.up),
+        ) else if (input.isKey(&static.key.right)) int.flag.clr(
+            &self.ui.input,
+            game.Dir.one(.right),
+        ) else if (input.isKey(&static.key.down)) int.flag.clr(
+            &self.ui.input,
+            game.Dir.one(.down),
+        ) else if (input.isKey(&static.key.left)) int.flag.clr(
+            &self.ui.input,
+            game.Dir.one(.left),
+        ) else if (input.isKey(&static.key.quit)) {
+            // TODO: Animation
+            int.flag.set(&self.ui.state, UIState.one(.quit));
+            try self.sample_queue.appendBounded(.{ .start = static.asset.sample.activate });
+            try self.sample_queue.appendBounded(.{ .start = static.asset.sample.woosh });
+            return .quit;
+        } else if (input.isKey(&static.key.dbg_prev_lvl)) {
+            if (comptime allow_level_skip) {
                 score = if (static.score.level(score) > 1) static.score.level_1 else 1;
                 self.session.score = score;
-            } else {},
-            static.key.db_next_lvl => if (comptime allow_level_skip) {
+            }
+        } else if (input.isKey(&static.key.db_next_lvl)) {
+            if (comptime allow_level_skip) {
                 const level = static.score.level(score);
                 score = if (level < 1)
                     static.score.level_1
                 else if (level < 2)
                     static.score.level_2
-                else {
-                    self.session.score = static.score.won_game + self.session.player_pos.u().y;
-                    return .died;
-                };
+                else
+                    static.score.level_3;
                 self.session.score = score;
-            } else {},
-            else => {},
+            }
         },
         .query => {},
     };
 
+    var pp: game.Point.U = undefined;
+    var has_x = false;
+    var has_y = false;
     {
-        var pp = self.session.player_pos.u();
+        pp = self.session.player_pos.u();
         const min = game.player_pos_min;
         const max = game.playerPosMax(self.session.size);
         const step = game.player_pos_step;
+
         if (int.flag.has(self.ui.input, game.Dir.one(.up)) and pp.y > min.y) {
             pp.y -= step.y;
+            has_y = true;
         }
         if (int.flag.has(self.ui.input, game.Dir.one(.right)) and pp.x < max.x) {
             pp.x += step.x;
+            has_x = true;
         }
         if (int.flag.has(self.ui.input, game.Dir.one(.down)) and pp.y < max.y) {
             pp.y += step.y;
+            has_y = true;
         }
         if (int.flag.has(self.ui.input, game.Dir.one(.left)) and pp.x > min.x) {
             pp.x -= step.x;
+            has_x = true;
         }
         self.session.player_pos = pp.i();
-        if (pp.x < self.road_left[pp.y] or pp.x > self.road_right[pp.y]) {
-            if (self.ui.input != game.Dir.none) int.flag.set(&self.ui.state, UIState.one(.key_down));
-            return .died;
-        }
     }
 
-    self.advance();
+    try self.advance();
+
+    {
+        log.debug(
+            "score check: {} {} {} {}",
+            .{ score -| pp.y, pp.x, self.road_left[pp.y], self.road_right[pp.y] },
+        );
+        if (pp.x < self.road_left[pp.y] or pp.x > self.road_right[pp.y]) {
+            if (self.ui.input != game.Dir.none) int.flag.set(&self.ui.state, UIState.one(.key_down));
+            try self.sample_queue.appendBounded(.{ .start = static.asset.sample.explosion });
+            return .died;
+        }
+        if (score -| self.session.player_pos.u().y >= static.score.won_game) {
+            try self.sample_queue.appendBounded(.{ .start = static.asset.sample.woosh });
+            return .died;
+        }
+
+        if (has_x and !int.flag.has(self.ui.state, UIState.one(.sound_engine_x_on))) {
+            try self.sample_queue.appendBounded(.{ .start = static.asset.sample.engine_x });
+            int.flag.set(&self.ui.state, UIState.one(.sound_engine_x_on));
+        } else if (!has_x and int.flag.has(self.ui.state, UIState.one(.sound_engine_x_on))) {
+            try self.sample_queue.appendBounded(.{ .stop = static.asset.sample.engine_x });
+            int.flag.clr(&self.ui.state, UIState.one(.sound_engine_x_on));
+        }
+        if (has_y and !int.flag.has(self.ui.state, UIState.one(.sound_engine_y_on))) {
+            try self.sample_queue.appendBounded(.{ .start = static.asset.sample.engine_y });
+            int.flag.set(&self.ui.state, UIState.one(.sound_engine_y_on));
+        } else if (!has_y and int.flag.has(self.ui.state, UIState.one(.sound_engine_y_on))) {
+            try self.sample_queue.appendBounded(.{ .stop = static.asset.sample.engine_y });
+            int.flag.clr(&self.ui.state, UIState.one(.sound_engine_y_on));
+        }
+
+        if (score == static.score.level_1) {
+            try self.music_queue.appendBounded(static.asset.music.levels[1]);
+        } else if (score == static.score.level_2) {
+            try self.music_queue.appendBounded(static.asset.music.levels[2]);
+        }
+    }
     return .running;
 }
 
@@ -411,7 +508,7 @@ fn updateScore(self: *GameState) !game.SessionState {
             if (!int.flag.has(self.ui.state, UIState.one(.waiting_release)) and
                 self.ui.delay > static.delay.score_in)
             {
-                if (input.keycode == static.key.quit) {
+                if (input.isKey(&static.key.quit)) {
                     if (int.flag.has(self.ui.state, UIState.one(.quit))) {
                         return .end;
                     } else {
@@ -419,6 +516,7 @@ fn updateScore(self: *GameState) !game.SessionState {
                     }
                 }
                 int.flag.set(&self.ui.state, UIState.one(.skip));
+                try self.sample_queue.appendBounded(.{ .start = static.asset.sample.activate });
             }
             int.flag.clr(&self.ui.state, UIState.many(&.{ .key_down, .waiting_release }));
         },
@@ -522,19 +620,43 @@ fn drawRunning(self: *GameState, frame: *const Frame) !void {
     const pp = self.session.player_pos.u();
     const p_idx = pp.y * size.x + pp.x;
 
-    const under_player = map[p_idx];
-    map[p_idx] = static.sym.player;
-    defer map[p_idx] = under_player;
+    {
+        const yt: i32 = @intCast(score);
+        const yb = yt -| size.i().y;
+        var idx: usize = 0;
+        while (idx < self.entities.items.len) : (idx += 1) {
+            const entity = &self.entities.items[idx];
+            if (!int.flag.has(entity.state, GameEntity.State.one(.exists))) continue;
+            var pyt = yt;
+            var pyb = yb;
+            const score_y = entity.pos.i().y;
+            switch (entity.parallax_y) {
+                0 => {},
+                else => {
+                    pyt = int.Q(8).floor(yt * entity.parallax_y);
+                    pyb = int.Q(8).floor(yb * entity.parallax_y);
+                },
+            }
+            if (score_y > pyt) continue;
+            if (score_y < pyb) continue;
+            const y: u32 = @intCast(int.map(i32, score_y, pyb, pyt, @intCast(size.y), 0));
+            frame.set(
+                entity.sym,
+                entity.attr,
+                y * size.x + entity.pos.x,
+            );
+        }
+    }
 
     for (0..size.y) |y| {
         const x0 = y * size.x;
         const level = static.score.level(score -| y);
         frame.write(map[x0 .. x0 + road_left[y]], clr.walls[level], x0);
-        frame.write(
-            map[x0 + road_left[y] .. x0 + road_right[y] + 1],
-            clr.gnds[level],
-            x0 + road_left[y],
-        );
+        // frame.write(
+        //     map[x0 + road_left[y] .. x0 + road_right[y] + 1],
+        //     clr.gnds[level],
+        //     x0 + road_left[y],
+        // );
         frame.write(
             map[x0 + road_right[y] + 1 .. x0 + size.x],
             clr.walls[level],
@@ -544,8 +666,11 @@ fn drawRunning(self: *GameState, frame: *const Frame) !void {
 
     score = score -| pp.y;
     const level = static.score.level(score);
+    frame.set(static.sym.player, clr.gnds[level], p_idx);
+
     const score_num = try self.scratch.print("{d:04}", .{score});
     defer self.scratch.free(score_num);
+
     frame.write(stxt.msgs_running[level], clr.txts[level], int.idx2D(height_full - 2, 1, size.x));
     frame.write(stxt.score, clr.txts[level], int.idx2D(height_full - 1, 1, size.x));
     frame.write(
@@ -565,8 +690,8 @@ fn drawScore(self: *GameState, frame: *const Frame) !void {
     const msg_y = height_full / 2;
     const score = self.session.score -| self.session.player_pos.u().y;
     const level = static.score.level(score);
-    const has_bg = level >= 3;
-    const attr = clr.msgs_scores[level];
+    const has_bg = self.session.state != .quit;
+    const attr = if (self.session.state == .quit) clr.msgs_scores_quit else clr.msgs_scores[level];
 
     const txt_score = try self.scratch.print(
         "{s}{}{s}",
@@ -657,6 +782,25 @@ fn drawScore(self: *GameState, frame: *const Frame) !void {
     }
 }
 
+pub const GameEntity = struct {
+    state: State.Flags = State.none,
+    pos: game.Point.U,
+    parallax_y: i32 = 0,
+    sym: u8,
+    attr: game.CellAttr,
+
+    pub const State = enum {
+        exists,
+
+        const flags = int.Flags(@This());
+        pub const Flags = flags.U;
+        pub const none = flags.none;
+        pub const default: Flags = one(.exists);
+        pub const one = flags.one;
+        pub const many = flags.many;
+    };
+};
+
 pub const GameState = struct {
     ui: UISession = .{},
     session: *game.Session,
@@ -668,6 +812,11 @@ pub const GameState = struct {
     road_right: [*]u32,
     row_rng: [*]prng.Batch.U,
     input_buf: *[cathode_run_options.input_buf_length]InputResult,
+    entities: std.ArrayList(GameEntity),
+    sample_queue: std.ArrayList(SampleCommand),
+    music_queue: std.ArrayList(?[]const u8),
+
+    pub const SampleCommand = union(enum) { start: []const u8, stop: []const u8 };
 
     pub fn init(gpa: Allocator, win_size: game.Point.U) !@This() {
         const session = try gpa.create(game.Session);
@@ -685,6 +834,12 @@ pub const GameState = struct {
         errdefer gpa.free(row_rng);
         const input_buf = try gpa.create([cathode_run_options.input_buf_length]InputResult);
         errdefer gpa.destroy(input_buf);
+        const entities = try gpa.alloc(GameEntity, cathode_run_options.entity_capacity);
+        errdefer gpa.free(entities);
+        const sample_queue = try gpa.alloc(SampleCommand, cathode_run_options.sample_queue_length);
+        errdefer gpa.free(sample_queue);
+        const music_queue = try gpa.alloc(?[]const u8, cathode_run_options.music_queue_length);
+        errdefer gpa.free(sample_queue);
         return .{
             .session = session,
             .scratch = scratch,
@@ -693,6 +848,9 @@ pub const GameState = struct {
             .road_right = road_right.ptr,
             .row_rng = row_rng.ptr,
             .input_buf = input_buf,
+            .entities = .initBuffer(entities),
+            .sample_queue = .initBuffer(sample_queue),
+            .music_queue = .initBuffer(music_queue),
         };
     }
 
@@ -704,6 +862,9 @@ pub const GameState = struct {
         gpa.free(self.rowRng());
         gpa.destroy(self.input_buf);
         gpa.destroy(self.session);
+        self.entities.deinit(gpa);
+        self.sample_queue.deinit(gpa);
+        self.music_queue.deinit(gpa);
         self.* = undefined;
     }
 
@@ -725,16 +886,16 @@ pub const GameState = struct {
             .{ self.path.p1, self.path.p2, self.path.amp1, self.path.amp2 },
         );
         @memset(self.symMap(), static.sym.gnd);
-        const wall = static.sym.dbl_walls[game.Dir.many(&.{ .up, .down })];
+        // const wall = static.sym.dbl_walls[game.Dir.many(&.{ .up, .down })];
         for (0..self.session.size.y) |y| {
-            self.road_left[y] = 1;
-            self.road_right[y] = self.session.size.x - 2;
-            self.sym_map[y * self.session.size.x] = wall;
-            self.sym_map[(y + 1) * self.session.size.x - 1] = wall;
+            self.road_left[y] = 0;
+            self.road_right[y] = self.session.size.x - 1;
+            // self.sym_map[y * self.session.size.x] = wall;
+            // self.sym_map[(y + 1) * self.session.size.x - 1] = wall;
         }
     }
 
-    fn advance(self: *@This()) void {
+    fn advance(self: *@This()) !void {
         const score = self.session.score;
         const seed = self.session.seed;
         const size = self.session.size;
@@ -750,7 +911,7 @@ pub const GameState = struct {
         @memmove(sym_map[size.x..], sym_map[0 .. sym_map.len - size.x]);
         @memmove(road_left[1..], road_left[0 .. road_left.len - 1]);
         @memmove(road_right[1..], road_right[0 .. road_right.len - 1]);
-        self.generateGameRow();
+        try self.generateGameRow();
     }
 
     // ------  ROAD  -----------
@@ -762,7 +923,7 @@ pub const GameState = struct {
     //       |_ gap_pos
     //       |_ road_left
 
-    fn generateGameRow(self: *@This()) void {
+    fn generateGameRow(self: *@This()) !void {
         const sym = static.sym;
         const dblWallsLookup = sym.dblWallsLookup;
         const Dir = game.Dir;
@@ -824,6 +985,7 @@ pub const GameState = struct {
                 ))
             ];
         }
+
         {
             const begin = road_left;
             const end = road_right;
@@ -832,10 +994,23 @@ pub const GameState = struct {
             const rng = row_rng[rng_idx];
             const rng_obs = Q(8).mod(rng);
             const obs_pos_rng = Q(16).mod(rng >> Q(8).bits);
-            const spawn_m = Q(8).tu(rng_obs < 8 + Q(10).round(score * 12 * road_w));
+            const rng_obs_2 = Q(1).mod(rng >> 2 * Q(8).bits);
+            const spawn_m2 = Q(8).tu(rng_obs_2 != 0);
             const obs_x = begin + obs_pos_rng % road_w;
-            map[obs_x] = int.select(u8, sym.void_stone, map[obs_x], spawn_m);
+            if (rng_obs < 8 + Q(10).round(score * 12 * road_w)) try self.entities.appendBounded(.{
+                .state = GameEntity.State.default,
+                .pos = .{ .x = obs_x, .y = score },
+                .parallax_y = int.select(u8, 0, 127, spawn_m2),
+                .sym = int.select(u8, sym.void_stone, sym.void_pebble, spawn_m2),
+                .attr = @bitCast(int.select(
+                    u8,
+                    @bitCast(static.clr.gnds[level]),
+                    @bitCast(static.clr.bgs[level]),
+                    spawn_m2,
+                )),
+            });
         }
+
         {
             const begin = road_right + 1;
             const end = size.x - 2;

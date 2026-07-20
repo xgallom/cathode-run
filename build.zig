@@ -4,6 +4,13 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
+    const install_assets = b.addInstallDirectory(.{
+        .source_dir = b.path("assets"),
+        .install_dir = .prefix,
+        .install_subdir = "assets",
+    });
+    b.getInstallStep().dependOn(&install_assets.step);
+
     const core = b.createModule(.{
         .root_source_file = b.path("src/core.zig"),
         .target = target,
@@ -19,6 +26,8 @@ pub fn build(b: *std.Build) void {
         },
         .link_libc = true,
     });
+    term_mod.addCSourceFile(.{ .file = b.path("vendor/miniaudio/miniaudio.c") });
+    term_mod.addIncludePath(b.path("vendor/miniaudio"));
 
     const check_term = b.addExecutable(.{
         .name = "cathode-run",

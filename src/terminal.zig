@@ -4,6 +4,7 @@ const assert = std.debug.assert;
 const log = std.log.scoped(.main);
 const Allocator = std.mem.Allocator;
 
+const Assets = @import("Assets.zig");
 const Platform = @import("platform/Terminal.zig");
 const core = @import("core");
 const static = core.static;
@@ -15,6 +16,12 @@ pub fn main() !void {
     var allocator = std.heap.DebugAllocator(.{}).init;
     defer _ = allocator.deinit();
     const gpa = allocator.allocator();
+
+    var arena = std.heap.ArenaAllocator.init(gpa);
+    defer arena.deinit();
+    const aa = arena.allocator();
+
+    const assets = try Assets.init(aa);
 
     var platform = try Platform.init(gpa);
     defer platform.deinit(gpa);
@@ -39,6 +46,52 @@ pub fn main() !void {
         return;
     }
 
+    try platform.audio.loadSound(
+        gpa,
+        try assets.assetPath(.samples, static.asset.sample.activate),
+        .oneshot,
+    );
+    try platform.audio.loadSound(
+        gpa,
+        try assets.assetPath(.samples, static.asset.sample.explosion),
+        .oneshot,
+    );
+    try platform.audio.loadSound(
+        gpa,
+        try assets.assetPath(.samples, static.asset.sample.woosh),
+        .oneshot,
+    );
+
+    try platform.audio.loadSound(
+        gpa,
+        try assets.assetPath(.samples, static.asset.sample.engine_idle),
+        .movement,
+    );
+    try platform.audio.loadSound(
+        gpa,
+        try assets.assetPath(.samples, static.asset.sample.engine_x),
+        .movement,
+    );
+    try platform.audio.loadSound(
+        gpa,
+        try assets.assetPath(.samples, static.asset.sample.engine_y),
+        .movement,
+    );
+
+    for (&static.asset.music.levels) |level| try platform.audio.loadSound(
+        gpa,
+        try assets.assetPath(.music, level),
+        .music,
+    );
+    try platform.audio.loadSound(
+        gpa,
+        try assets.assetPath(.music, static.asset.music.menu),
+        .music,
+    );
+
+    var active_music: ?[:0]const u8 = null;
+    defer if (active_music) |am| platform.audio.stopSound(am) catch {};
+
     var frame_idx: usize = 0;
     while (true) {
         const frame = &frames[frame_idx % frames.len];
@@ -47,6 +100,24 @@ pub fn main() !void {
 
         _ = try platform.getInput(game.input_buf);
         const to = try core.update(&game);
+
+        while (game.sample_queue.pop()) |cmd| switch (cmd) {
+            .start => |sample| try platform.playSound(
+                try assets.assetPath(.samples, sample),
+            ),
+            .stop => |sample| try platform.audio.stopSound(
+                try assets.assetPath(.samples, sample),
+            ),
+        };
+        if (game.music_queue.pop()) |music| {
+            if (active_music) |am| try platform.audio.stopSound(am);
+            if (music) |m| {
+                const path = try assets.assetPath(.music, m);
+                try platform.audio.playSound(path);
+                active_music = path;
+            } else active_music = null;
+        }
+
         try core.render(&game, frame);
         try platform.renderFull(frame);
 

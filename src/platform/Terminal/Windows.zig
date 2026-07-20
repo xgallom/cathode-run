@@ -25,7 +25,7 @@ event_buf: [options.input_buf_length - 1]INPUT_RECORD = undefined,
 
 const spinloop_max = unit.ms(6).toNs();
 
-const KEY_EVENT: u16 = 0x0010;
+const KEY_EVENT: u16 = 0x0001;
 
 const ENABLE_PROCESSED_OUTPUT: u32 = 0x0001;
 const ENABLE_WRAP_AT_EOL_OUTPUT: u32 = 0x0002;
@@ -158,6 +158,7 @@ pub fn readInput(self: *@This(), buf: []core.InputResult) !bool {
         log.err("failed obtaining number of input events", .{});
         return error.GetNumberOfConsoleInputEventsFailed;
     }
+    log.debug("max input events: {}", .{max_len});
     if (max_len == 0) {
         buf[0] = .none;
         return false;
@@ -167,17 +168,21 @@ pub fn readInput(self: *@This(), buf: []core.InputResult) !bool {
         log.err("failed obtaining input events", .{});
         return error.ReadConsoleInputFailed;
     }
+    log.debug("input events: {}", .{len});
     var n: usize = 0;
     for (self.event_buf[0..len]) |*event| {
+        log.debug("event: 0x{X:04}", .{event.EventType});
         if (event.EventType == KEY_EVENT) {
             const ker: KEY_EVENT_RECORD = event.Event.KeyEvent;
             const virtual_key = ker.wVirtualKeyCode;
+            const key = ker.uChar.AsciiChar;
+            log.debug("key: {c} {} {}", .{ key, virtual_key, ker.bKeyDown });
             if (virtual_key >= 256) continue;
             if (ker.bKeyDown != windows.FALSE) {
-                buf[n] = .down(@intCast(virtual_key));
+                buf[n] = .down(@intCast(key));
                 n += 1;
             } else {
-                buf[n] = .up(@intCast(virtual_key));
+                buf[n] = .up(@intCast(key));
                 n += 1;
             }
         }
@@ -196,6 +201,7 @@ pub fn write(self: *const @This(), buf: []const u8) !void {
 
 fn initPerformanceCounter(self: *@This()) !void {
     self.pc_freq = windows.QueryPerformanceFrequency();
+    log.info("pc: {}", .{self.pc_freq});
 }
 
 fn enableAnsiSequences(self: *@This()) !void {

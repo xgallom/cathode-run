@@ -183,7 +183,7 @@ fn enableRawMode(self: *@This()) !void {
         for (&input_buf) |input| switch (input.event) {
             .none => break,
             .err => return error.InputFailed,
-            .query => switch (input.querytype()) {
+            .query => switch (input.queryType()) {
                 .pe => is_pe = true,
                 .da => is_da = true,
             },
