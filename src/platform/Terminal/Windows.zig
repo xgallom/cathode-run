@@ -199,6 +199,12 @@ pub fn write(self: *const @This(), buf: []const u8) !void {
     }
 }
 
+pub fn supports24BitColor(gpa: Allocator) !bool {
+    _ = gpa;
+    // TODO: What if cmd.exe?
+    return true;
+}
+
 fn initPerformanceCounter(self: *@This()) !void {
     self.pc_freq = windows.QueryPerformanceFrequency();
     log.info("pc: {}", .{self.pc_freq});

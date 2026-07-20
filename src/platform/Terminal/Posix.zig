@@ -108,6 +108,20 @@ pub fn write(self: *const @This(), buf: []const u8) !void {
     if (c.fflush(stdout()) != 0) return error.FlushFailed;
 }
 
+pub fn supports24BitColor(gpa: Allocator) !bool {
+    const colorterm = try std.process.getEnvVarOwned(gpa, "COLORTERM");
+    defer gpa.free(colorterm);
+    for (colorterm) |*ch| ch.* = std.ascii.toLower(ch.*);
+    if (std.mem.indexOf(u8, colorterm, "24bit") != null or
+        std.mem.indexOf(u8, colorterm, "truecolor") != null) return true;
+    const term = try std.process.getEnvVarOwned(gpa, "TERM");
+    defer gpa.free(term);
+    for (term) |*ch| ch.* = std.ascii.toLower(ch.*);
+    if (std.mem.indexOf(u8, term, "24bit") != null or
+        std.mem.indexOf(u8, term, "truecolor") != null) return true;
+    return false;
+}
+
 fn setVBuf(self: *const @This(), buf: []u8) !void {
     _ = self;
     switch (errno(c.setvbuf(stdout(), buf.ptr, c._IOFBF, buf.len))) {

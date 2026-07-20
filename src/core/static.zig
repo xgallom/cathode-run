@@ -1,5 +1,6 @@
 const root = @import("root");
 const options = root.cathode_run_options;
+const std = @import("std");
 const game = @import("game.zig");
 const unit = @import("unit.zig");
 
@@ -24,7 +25,7 @@ pub const asset = struct {
 
 pub const gap_width = struct {
     pub const max = 64;
-    pub const min = if (options.wide_gap orelse options.debug) 32 else 16;
+    pub const min = if (options.wide_gap orelse options.debug) 32 else 18;
 };
 
 pub const score = struct {
@@ -90,6 +91,10 @@ pub const ansi = struct {
         return attr_data[ca.bg][ca.fg];
     }
 
+    pub fn attr24Bit(ca: game.CellAttr) []const u8 {
+        return attr_data_24bit[ca.bg][ca.fg];
+    }
+
     fn bg(v: u4) []const u8 {
         return if (v >= 8) "10" ++ &[_]u8{@as(u8, v & 0x7) + '0'} else "4" ++ &[_]u8{@as(u8, v) + '0'};
     }
@@ -103,6 +108,43 @@ pub const ansi = struct {
         for (0..16) |b| {
             for (0..16) |f| {
                 result[b][f] = "\x1b[0;" ++ bg(@intCast(b)) ++ ";" ++ fg(@intCast(f)) ++ "m";
+            }
+        }
+        break :blk result;
+    };
+
+    fn bg24(v: [3][]const u8) []const u8 {
+        return "48;2;" ++ v[0] ++ ";" ++ v[1] ++ ";" ++ v[2];
+    }
+
+    fn fg24(v: [3][]const u8) []const u8 {
+        return "38;2;" ++ v[0] ++ ";" ++ v[1] ++ ";" ++ v[2];
+    }
+
+    const attr_data_24bit = blk: {
+        const colors: [16][3][]const u8 = .{
+            .{ "0", "0", "0" },
+            .{ "170", "0", "0" },
+            .{ "0", "170", "0" },
+            .{ "170", "85", "0" },
+            .{ "0", "0", "170" },
+            .{ "170", "0", "170" },
+            .{ "0", "170", "170" },
+            .{ "170", "170", "170" },
+            .{ "85", "85", "85" },
+            .{ "255", "85", "85" },
+            .{ "85", "255", "85" },
+            .{ "255", "255", "85" },
+            .{ "85", "85", "255" },
+            .{ "255", "85", "255" },
+            .{ "85", "255", "255" },
+            .{ "255", "255", "255" },
+        };
+
+        var result: [16][16][]const u8 = undefined;
+        for (0..16) |b| {
+            for (0..16) |f| {
+                result[b][f] = "\x1b[0;" ++ bg24(colors[b]) ++ ";" ++ fg24(colors[f]) ++ "m";
             }
         }
         break :blk result;
@@ -127,7 +169,7 @@ pub const clr = struct {
         .{ .bg = C.many(&.{ .red, .blue, .bold }), .fg = C.many(&.{ .red, .green, .blue, .bold }) },
         .{ .fg = C.many(&.{ .red, .green, .blue, .bold }) },
     };
-    pub const bgs = [_]game.CellAttr{
+    pub const pcl_engine = [_]game.CellAttr{
         .{ .fg = C.many(&.{ .red, .green }) },
         .{ .fg = C.many(&.{ .green, .blue }) },
         .{ .fg = C.many(&.{ .red, .blue }) },
@@ -163,7 +205,7 @@ pub const sym = struct {
     pub const gnd = ' ';
     pub const player = 0xE9;
     pub const void_stone = 0xF8;
-    pub const void_pebble = 0xF9;
+    pub const pcl_engine = 0xFA;
     pub const blocks = [_]u8{
         gnd,
         0xB0,

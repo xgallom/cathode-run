@@ -33,7 +33,7 @@ pub const cathode_run_options: Options = .{
     // .output_symbol_table = true,
     // .wide_gap = true,
     // .slow = true,
-    // .random_seed = false,
+    .random_seed = false,
     .allow_level_skip = true,
 };
 
@@ -181,6 +181,7 @@ pub const UIState = enum {
     key_down,
     waiting_release,
     waiting_sound,
+    sound_engine_idle_on,
     sound_engine_x_on,
     sound_engine_y_on,
 
@@ -208,6 +209,7 @@ pub fn transfer(self: *GameState, to: game.SessionState) !game.SessionState {
         .start => unreachable,
         .init => {
             self.session.reset();
+            self.entities.clearRetainingCapacity();
             if (!int.flag.has(self.ui.state, UIState.one(.not_first_start))) {
                 try self.music_queue.appendBounded(static.asset.music.menu);
                 int.flag.set(&self.ui.state, UIState.one(.not_first_start));
@@ -230,6 +232,7 @@ pub fn transfer(self: *GameState, to: game.SessionState) !game.SessionState {
             self.ui.input = game.Dir.none;
             self.session.state = .running;
             try self.sample_queue.appendBounded(.{ .start = static.asset.sample.engine_idle });
+            int.flag.set(&self.ui.state, UIState.one(.sound_engine_idle_on));
             try self.music_queue.appendBounded(static.asset.music.levels[0]);
             return .running;
         },
@@ -247,7 +250,7 @@ pub fn transfer(self: *GameState, to: game.SessionState) !game.SessionState {
             try self.sample_queue.appendBounded(.{ .stop = static.asset.sample.engine_y });
             int.flag.clr(
                 &self.ui.state,
-                UIState.many(&.{ .sound_engine_x_on, .sound_engine_y_on }),
+                UIState.many(&.{ .sound_engine_idle_on, .sound_engine_x_on, .sound_engine_y_on }),
             );
             try self.music_queue.appendBounded(static.asset.music.menu);
             return state;
@@ -427,8 +430,8 @@ fn updateRunning(self: *GameState) !game.SessionState {
     };
 
     var pp: game.Point.U = undefined;
-    var has_x = false;
-    var has_y = false;
+    var has_x: i32 = 0;
+    var has_y: i32 = 0;
     {
         pp = self.session.player_pos.u();
         const min = game.player_pos_min;
@@ -437,19 +440,19 @@ fn updateRunning(self: *GameState) !game.SessionState {
 
         if (int.flag.has(self.ui.input, game.Dir.one(.up)) and pp.y > min.y) {
             pp.y -= step.y;
-            has_y = true;
+            has_y += 1;
         }
         if (int.flag.has(self.ui.input, game.Dir.one(.right)) and pp.x < max.x) {
             pp.x += step.x;
-            has_x = true;
+            has_x += 1;
         }
         if (int.flag.has(self.ui.input, game.Dir.one(.down)) and pp.y < max.y) {
             pp.y += step.y;
-            has_y = true;
+            has_y -= 1;
         }
         if (int.flag.has(self.ui.input, game.Dir.one(.left)) and pp.x > min.x) {
             pp.x -= step.x;
-            has_x = true;
+            has_x -= 1;
         }
         self.session.player_pos = pp.i();
     }
@@ -471,19 +474,50 @@ fn updateRunning(self: *GameState) !game.SessionState {
             return .died;
         }
 
-        if (has_x and !int.flag.has(self.ui.state, UIState.one(.sound_engine_x_on))) {
+        if (has_x != 0 and !int.flag.has(self.ui.state, UIState.one(.sound_engine_x_on))) {
             try self.sample_queue.appendBounded(.{ .start = static.asset.sample.engine_x });
             int.flag.set(&self.ui.state, UIState.one(.sound_engine_x_on));
-        } else if (!has_x and int.flag.has(self.ui.state, UIState.one(.sound_engine_x_on))) {
+        } else if (has_x == 0 and int.flag.has(self.ui.state, UIState.one(.sound_engine_x_on))) {
             try self.sample_queue.appendBounded(.{ .stop = static.asset.sample.engine_x });
             int.flag.clr(&self.ui.state, UIState.one(.sound_engine_x_on));
         }
-        if (has_y and !int.flag.has(self.ui.state, UIState.one(.sound_engine_y_on))) {
+
+        if (has_y > 0 and !int.flag.has(self.ui.state, UIState.one(.sound_engine_y_on))) {
             try self.sample_queue.appendBounded(.{ .start = static.asset.sample.engine_y });
             int.flag.set(&self.ui.state, UIState.one(.sound_engine_y_on));
-        } else if (!has_y and int.flag.has(self.ui.state, UIState.one(.sound_engine_y_on))) {
+        } else if (has_y <= 0 and int.flag.has(self.ui.state, UIState.one(.sound_engine_y_on))) {
             try self.sample_queue.appendBounded(.{ .stop = static.asset.sample.engine_y });
+            try self.sample_queue.appendBounded(.{ .start = static.asset.sample.engine_idle });
             int.flag.clr(&self.ui.state, UIState.one(.sound_engine_y_on));
+        }
+
+        if (has_y < 0 and int.flag.has(self.ui.state, UIState.one(.sound_engine_idle_on))) {
+            try self.sample_queue.appendBounded(.{ .stop = static.asset.sample.engine_idle });
+            int.flag.clr(&self.ui.state, UIState.one(.sound_engine_idle_on));
+        } else if (has_y >= 0 and !int.flag.has(self.ui.state, UIState.one(.sound_engine_idle_on))) {
+            try self.sample_queue.appendBounded(.{ .start = static.asset.sample.engine_idle });
+            int.flag.set(&self.ui.state, UIState.one(.sound_engine_idle_on));
+        }
+
+        blk: {
+            if (has_y < 0 and has_x == 0) break :blk;
+            const mod: u32 = switch (has_y) {
+                -1 => 3,
+                0 => 2,
+                1 => 1,
+                else => unreachable,
+            };
+            if (score % mod == 0) {
+                const y = score -| (pp.y + 1);
+                const level = static.score.level(y);
+                try self.entities.appendBounded(.{
+                    .state = GameEntity.State.default,
+                    .pos = .{ .x = @intCast(pp.i().x - has_x), .y = y },
+                    .parallax_y = 0, // TODO:
+                    .sym = static.sym.pcl_engine,
+                    .attr = static.clr.pcl_engine[level],
+                });
+            }
         }
 
         if (score == static.score.level_1) {
@@ -627,19 +661,15 @@ fn drawRunning(self: *GameState, frame: *const Frame) !void {
         while (idx < self.entities.items.len) : (idx += 1) {
             const entity = &self.entities.items[idx];
             if (!int.flag.has(entity.state, GameEntity.State.one(.exists))) continue;
-            var pyt = yt;
-            var pyb = yb;
             const score_y = entity.pos.i().y;
-            switch (entity.parallax_y) {
-                0 => {},
-                else => {
-                    pyt = int.Q(8).floor(yt * entity.parallax_y);
-                    pyb = int.Q(8).floor(yb * entity.parallax_y);
-                },
-            }
-            if (score_y > pyt) continue;
-            if (score_y < pyb) continue;
-            const y: u32 = @intCast(int.map(i32, score_y, pyb, pyt, @intCast(size.y), 0));
+            const y_off = switch (entity.parallax_y) {
+                0 => 0,
+                else => int.Q(8).floor((yt - score_y) * entity.parallax_y),
+            };
+            if (score_y + y_off > yt) continue;
+            if (score_y + y_off <= yb) continue;
+            const y: u32 = @intCast(yt - (score_y + y_off));
+            log.debug("{} {} {} {} {} {}", .{ score, idx, score_y + y_off, y, entity.sym, y * size.x + entity.pos.x });
             frame.set(
                 entity.sym,
                 entity.attr,
@@ -664,6 +694,7 @@ fn drawRunning(self: *GameState, frame: *const Frame) !void {
         );
     }
 
+    log.debug("{} player {} {} {}", .{ score, pp.y, score -| pp.y, p_idx });
     score = score -| pp.y;
     const level = static.score.level(score);
     frame.set(static.sym.player, clr.gnds[level], p_idx);
@@ -994,20 +1025,12 @@ pub const GameState = struct {
             const rng = row_rng[rng_idx];
             const rng_obs = Q(8).mod(rng);
             const obs_pos_rng = Q(16).mod(rng >> Q(8).bits);
-            const rng_obs_2 = Q(1).mod(rng >> 2 * Q(8).bits);
-            const spawn_m2 = Q(8).tu(rng_obs_2 != 0);
             const obs_x = begin + obs_pos_rng % road_w;
             if (rng_obs < 8 + Q(10).round(score * 12 * road_w)) try self.entities.appendBounded(.{
                 .state = GameEntity.State.default,
                 .pos = .{ .x = obs_x, .y = score },
-                .parallax_y = int.select(u8, 0, 127, spawn_m2),
-                .sym = int.select(u8, sym.void_stone, sym.void_pebble, spawn_m2),
-                .attr = @bitCast(int.select(
-                    u8,
-                    @bitCast(static.clr.gnds[level]),
-                    @bitCast(static.clr.bgs[level]),
-                    spawn_m2,
-                )),
+                .sym = sym.void_stone,
+                .attr = static.clr.gnds[level],
             });
         }
 

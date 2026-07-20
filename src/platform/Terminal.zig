@@ -22,6 +22,7 @@ stdout_buf: [*]u8,
 win_size: game.Point.U,
 last_frame: u64 = 0,
 impl: Impl = .{},
+attr: *const fn (ca: game.CellAttr) []const u8,
 
 const stdout_buf_len = unit.MB(1);
 const spinloop_max = unit.ms(6).toNs();
@@ -59,11 +60,14 @@ pub fn init(gpa: Allocator) !@This() {
     errdefer txt.deinit(gpa);
     const stdout_buf = try stdout_buf_len.alloc(gpa);
     errdefer gpa.free(stdout_buf);
+    const supports_24bit = try Impl.supports24BitColor(gpa);
+    log.info("24bit mode: {}", .{supports_24bit});
     return .{
         .audio = audio,
         .txt = txt,
         .stdout_buf = stdout_buf.ptr,
         .win_size = try Impl.getWinSize(),
+        .attr = if (supports_24bit) static.ansi.attr24Bit else static.ansi.attr,
     };
 }
 
@@ -107,14 +111,13 @@ pub fn renderFull(self: *@This(), frame: *core.Frame) !void {
     assert(frame.syms.len == frame.attrs.len);
     assert(frame.syms.len == self.win_size.area());
 
-    try self.txt.write(static.ansi.sync_start ++ static.ansi.cur_rst);
     var i: RenderIndexer = .{};
     while (i.check(frame.syms.len)) {
         const start = i.idx;
         const end = for (start..frame.syms.len) |n| {
             if (frame.attrs[n] != frame.attrs[start]) break n;
         } else frame.syms.len;
-        try self.txt.write(static.ansi.attr(frame.attrs[start]));
+        try self.txt.write(self.attr(frame.attrs[start]));
         try self.txt.writeSyms(frame.syms[start..end]);
         i.add(end - i.idx, self.win_size.x);
     }
