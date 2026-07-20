@@ -49,7 +49,10 @@ pub fn init(gpa: Allocator) !@This() {
 }
 
 pub fn deinit(self: *@This(), gpa: Allocator) void {
-    for (self.sounds.values()) |sound| c.ma_sound_uninit(sound.ptr);
+    for (self.sounds.values()) |sound| {
+        c.ma_sound_uninit(sound.ptr);
+        gpa.destroy(sound.ptr);
+    }
     self.sounds.deinit(gpa);
     c.ma_engine_uninit(self.engine);
     gpa.destroy(self.engine);

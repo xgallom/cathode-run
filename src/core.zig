@@ -40,7 +40,7 @@ pub const cathode_run_options: Options = .{
 pub const std_options: std.Options = .{
     .log_scope_levels = &.{
         .{ .scope = .audio, .level = .info },
-        .{ .scope = .core, .level = .debug },
+        .{ .scope = .core, .level = .info },
         .{ .scope = .cp437, .level = .info },
         .{ .scope = .game, .level = .info },
         .{ .scope = .int, .level = .info },
