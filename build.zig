@@ -8,6 +8,7 @@ pub fn build(b: *std.Build) !void {
     const zmod = zengine.module("zengine");
     const z = @import("zengine");
     const options = z.getOptions(b);
+    std.log.info("zengine path: {s}", .{zengine.builder.pathFromRoot("")});
 
     const install_assets = try z.addInstallAssets(b);
 
@@ -56,7 +57,7 @@ pub fn build(b: *std.Build) !void {
         .root_module = gen_menu_bg_mod,
     });
 
-    const ext = try z.addExternal(b, .{
+    _ = try z.addExternal(b, .{
         .b = zengine.builder,
         .options = options,
         .target = target,
@@ -66,7 +67,6 @@ pub fn build(b: *std.Build) !void {
     const install_libs = try z.addInstallLibs(b, .{
         .b = zengine.builder,
         .module = zmod,
-        .build_ext = ext.build,
         .options = options,
         .target = target,
         .optimize = optimize,

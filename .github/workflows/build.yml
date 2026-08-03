@@ -91,13 +91,17 @@ jobs:
         if: runner.os != 'Windows'
         shell: bash
         working-directory: 'cathode-run'
-        run: zig build -Dtarget=${{ matrix.target }} -Dcpu=${{ matrix.cpu }} -Doptimize=ReleaseFast
+        run: |
+          zig build ext -Dtarget=${{ matrix.target }} -Dcpu=${{ matrix.cpu }} -Doptimize=ReleaseFast
+          zig build -Dtarget=${{ matrix.target }} -Dcpu=${{ matrix.cpu }} -Doptimize=ReleaseFast
 
       - name: Build (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         working-directory: 'cathode-run'
-        run: zig build -Dtarget=${{ matrix.target }} -Dcpu=${{ matrix.cpu }} -Doptimize=ReleaseFast
+        run: |
+          zig build ext -Dtarget=${{ matrix.target }} -Dcpu=${{ matrix.cpu }} -Doptimize=ReleaseFast
+          zig build -Dtarget=${{ matrix.target }} -Dcpu=${{ matrix.cpu }} -Doptimize=ReleaseFast
 
       - name: Package SDK Architecture (Unix)
         if: runner.os != 'Windows'
