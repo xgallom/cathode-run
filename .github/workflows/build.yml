@@ -100,10 +100,10 @@ jobs:
       - name: Allocate Swap Space
         if: runner.os == 'Linux'
         run: |
-          sudo fallocate -l 10G /swapfile
-          sudo chmod 600 /swapfile
-          sudo mkswap /swapfile
-          sudo swapon /swapfile
+          sudo fallocate -l 10G /swapfile-extra
+          sudo chmod 600 /swapfile-extra
+          sudo mkswap /swapfile-extra
+          sudo swapon /swapfile-extra
 
       - name: Select XCode
         if: runner.os == 'macOS'
