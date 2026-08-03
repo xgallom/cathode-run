@@ -2,5 +2,6 @@
 /zig-out
 
 err.log
+imgui.ini
 .DS_Store
 

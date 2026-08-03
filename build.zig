@@ -5,14 +5,11 @@ pub fn build(b: *std.Build) !void {
     const optimize = b.standardOptimizeOption(.{});
 
     const zengine = b.dependency("zengine", .{});
+    const zmod = zengine.module("zengine");
     const z = @import("zengine");
     const options = z.getOptions(b);
 
-    const install_assets = b.addInstallDirectory(.{
-        .source_dir = b.path("assets"),
-        .install_dir = .prefix,
-        .install_subdir = "assets",
-    });
+    const install_assets = try z.addInstallAssets(b);
 
     const core = b.createModule(.{
         .root_source_file = b.path("src/core.zig"),
@@ -26,7 +23,7 @@ pub fn build(b: *std.Build) !void {
         .optimize = optimize,
         .imports = &.{
             .{ .name = "core", .module = core },
-            .{ .name = "zengine", .module = zengine.module("zengine") },
+            .{ .name = "zengine", .module = zmod },
         },
         .pic = true,
     });
@@ -37,7 +34,7 @@ pub fn build(b: *std.Build) !void {
         .optimize = optimize,
         .imports = &.{
             .{ .name = "core", .module = core },
-            .{ .name = "zengine", .module = zengine.module("zengine") },
+            .{ .name = "zengine", .module = zmod },
         },
     });
 
@@ -59,10 +56,28 @@ pub fn build(b: *std.Build) !void {
         .root_module = gen_menu_bg_mod,
     });
 
+    const ext = try z.addExternal(b, .{
+        .b = zengine.builder,
+        .options = options,
+        .target = target,
+        .optimize = optimize,
+    });
+
+    const install_libs = try z.addInstallLibs(b, .{
+        .b = zengine.builder,
+        .module = zmod,
+        .build_ext = ext.build,
+        .options = options,
+        .target = target,
+        .optimize = optimize,
+    });
+    exe.step.dependOn(install_libs);
+    exe.each_lib_rpath = false;
+
     {
         const install_shaders_dir = try z.addCompileShaders(b, .{
             .b = zengine.builder,
-            .module = zengine.module("zengine"),
+            .module = zmod,
             .options = options,
             .optimize = optimize,
         });
@@ -72,7 +87,7 @@ pub fn build(b: *std.Build) !void {
         const install_shaders_dir = try z.addCompileShaders(b, .{
             .b = zengine.builder,
             .src = b.path("shaders"),
-            .module = zengine.module("zengine"),
+            .module = zmod,
             .options = options,
             .optimize = optimize,
         });

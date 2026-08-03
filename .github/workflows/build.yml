@@ -84,10 +84,11 @@ jobs:
         if: runner.os != 'Windows'
         shell: bash
         run: |
-          mkdir -p staging/bin
-
-          cp zig-out/bin/cathode-run staging/bin/cathode-run
-          cp -r zig-out/assets staging/assets
+          cp -rf zig-out/assets staging/assets
+          cp -rf zig-out/bin staging/bin
+          cp -rf zig-out/lib staging/lib
+          cp -rf zig-out/shaders staging/shaders
+          cp -rf zig-out/share staging/share
 
           chmod +x staging/bin/cathode-run
 
@@ -98,11 +99,15 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force -Path staging/bin
           New-Item -ItemType Directory -Force -Path staging/assets
+          New-Item -ItemType Directory -Force -Path staging/bin
+          New-Item -ItemType Directory -Force -Path staging/shaders
+          New-Item -ItemType Directory -Force -Path staging/share
 
-          Copy-Item "zig-out/bin/cathode-run.exe" -Destination "staging/bin/cathode-run.exe"
           Copy-Item "zig-out/assets/*" -Destination "staging/assets" -Recurse -Force
+          Copy-Item "zig-out/bin/*" -Destination "staging/bin" -Recurse -Force
+          Copy-Item "zig-out/shaders/*" -Destination "staging/shaders" -Recurse -Force
+          Copy-Item "zig-out/share/*" -Destination "staging/share" -Recurse -Force
 
           New-Item -ItemType Directory -Force -Path dist
           Compress-Archive -Path staging/* -DestinationPath "dist/${{ matrix.archive }}"
