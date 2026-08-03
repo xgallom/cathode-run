@@ -6,8 +6,8 @@
     .dependencies = .{
         // .zengine = .{ .path = "../zengine" },
         .zengine = .{
-            .url = "git+https://github.com/xgallom/zengine#12320cee6f5d07754026eca37f0a6a66893b228b",
-            .hash = "zengine-0.1.0-i3_GdI6iDAD-LtijSqB6Jt0OX6L4dpuhY_m6oaU6Jv6M",
+            .url = "git+https://github.com/xgallom/zengine#98040b9fe00df0e5fed2506b403edd7855abc82c",
+            .hash = "zengine-0.1.0-i3_GdCPUDABdjOTWaUp_kDW7D7HlsmoY4o_DwylVoaCO",
         },
     },
     .paths = .{
