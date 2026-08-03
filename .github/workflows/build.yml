@@ -12,12 +12,14 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          path: 'cathode-run'
 
       - name: Checkout Zengine
         uses: actions/checkout@v7
         with:
           repository: 'xgallom/zengine'
-          path: '../zengine'
+          path: 'zengine'
 
       - name: Install Zig
         uses: mlugg/setup-zig@v2
@@ -25,6 +27,7 @@ jobs:
           version: 0.15.2
 
       - name: Test
+        working-directory: 'cathode-run'
         run: zig build test
 
   build:
@@ -63,12 +66,14 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          path: 'cathode-run'
 
       - name: Checkout Zengine
         uses: actions/checkout@v7
         with:
           repository: 'xgallom/zengine'
-          path: '../zengine'
+          path: 'zengine'
 
       - name: Select XCode
         if: runner.os == 'macOS'
@@ -85,22 +90,25 @@ jobs:
       - name: Build (Unix)
         if: runner.os != 'Windows'
         shell: bash
+        working-directory: 'cathode-run'
         run: zig build -Dtarget=${{ matrix.target }} -Dcpu=${{ matrix.cpu }} -Doptimize=ReleaseFast
 
       - name: Build (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
+        working-directory: 'cathode-run'
         run: zig build -Dtarget=${{ matrix.target }} -Dcpu=${{ matrix.cpu }} -Doptimize=ReleaseFast
 
       - name: Package SDK Architecture (Unix)
         if: runner.os != 'Windows'
         shell: bash
         run: |
-          cp -rf zig-out/assets staging/assets
-          cp -rf zig-out/bin staging/bin
-          cp -rf zig-out/lib staging/lib
-          cp -rf zig-out/shaders staging/shaders
-          cp -rf zig-out/share staging/share
+          mkdir -p staging
+          cp -rf cathode-run/zig-out/assets staging/assets
+          cp -rf cathode-run/zig-out/bin staging/bin
+          cp -rf cathode-run/zig-out/lib staging/lib
+          cp -rf cathode-run/zig-out/shaders staging/shaders
+          cp -rf cathode-run/zig-out/share staging/share
 
           chmod +x staging/bin/cathode-run
 
@@ -116,10 +124,10 @@ jobs:
           New-Item -ItemType Directory -Force -Path staging/shaders
           New-Item -ItemType Directory -Force -Path staging/share
 
-          Copy-Item "zig-out/assets/*" -Destination "staging/assets" -Recurse -Force
-          Copy-Item "zig-out/bin/*" -Destination "staging/bin" -Recurse -Force
-          Copy-Item "zig-out/shaders/*" -Destination "staging/shaders" -Recurse -Force
-          Copy-Item "zig-out/share/*" -Destination "staging/share" -Recurse -Force
+          Copy-Item "cathode-run/zig-out/assets/*" -Destination "staging/assets" -Recurse -Force
+          Copy-Item "cathode-run/zig-out/bin/*" -Destination "staging/bin" -Recurse -Force
+          Copy-Item "cathode-run/zig-out/shaders/*" -Destination "staging/shaders" -Recurse -Force
+          Copy-Item "cathode-run/zig-out/share/*" -Destination "staging/share" -Recurse -Force
 
           New-Item -ItemType Directory -Force -Path dist
           Compress-Archive -Path staging/* -DestinationPath "dist/${{ matrix.archive }}"
