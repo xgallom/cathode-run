@@ -13,6 +13,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
+      - name: Checkout Zengine
+        uses: actions/checkout@v7
+        with:
+          repository: 'xgallom/zengine'
+          path: '../zengine'
+
       - name: Install Zig
         uses: mlugg/setup-zig@v2
         with:
