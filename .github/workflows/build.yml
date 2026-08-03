@@ -75,6 +75,28 @@ jobs:
           repository: 'xgallom/zengine'
           path: 'zengine'
 
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libasound2-dev \
+            libpulse-dev \
+            libaudio-dev \
+            libx11-dev \
+            libxext-dev \
+            libxrandr-dev \
+            libxcursor-dev \
+            libxi-dev \
+            libxinerama-dev \
+            libxxf86vm-dev \
+            libxss-dev \
+            libgl1-mesa-dev \
+            libdbus-1-dev \
+            libudev-dev \
+            libwayland-dev \
+            libxkbcommon-dev
+
       - name: Select XCode
         if: runner.os == 'macOS'
         uses: maxim-lobanov/setup-xcode@v1
