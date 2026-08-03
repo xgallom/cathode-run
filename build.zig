@@ -1,15 +1,18 @@
 const std = @import("std");
 
-pub fn build(b: *std.Build) void {
+pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
+
+    const zengine = b.dependency("zengine", .{});
+    const z = @import("zengine");
+    const options = z.getOptions(b);
 
     const install_assets = b.addInstallDirectory(.{
         .source_dir = b.path("assets"),
         .install_dir = .prefix,
         .install_subdir = "assets",
     });
-    b.getInstallStep().dependOn(&install_assets.step);
 
     const core = b.createModule(.{
         .root_source_file = b.path("src/core.zig"),
@@ -17,49 +20,82 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
-    const term_mod = b.createModule(.{
-        .root_source_file = b.path("src/terminal.zig"),
+    const exe_mod = b.createModule(.{
+        .root_source_file = b.path("src/zengine.zig"),
         .target = target,
         .optimize = optimize,
         .imports = &.{
             .{ .name = "core", .module = core },
+            .{ .name = "zengine", .module = zengine.module("zengine") },
         },
-        .link_libc = true,
+        .pic = true,
     });
-    term_mod.addCSourceFile(.{ .file = b.path("vendor/miniaudio/miniaudio.c") });
-    term_mod.addIncludePath(b.path("vendor/miniaudio"));
 
-    if (target.result.os.tag == .macos) {
-        term_mod.linkFramework("CoreAudio", .{ .needed = true });
-        term_mod.linkFramework("CoreFoundation", .{});
-        term_mod.linkFramework("AudioUnit", .{});
-        term_mod.linkFramework("AudioToolbox", .{});
+    const gen_menu_bg_mod = b.createModule(.{
+        .root_source_file = b.path("src/gen_menu_bg.zig"),
+        .target = b.graph.host,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "core", .module = core },
+            .{ .name = "zengine", .module = zengine.module("zengine") },
+        },
+    });
+
+    const check = b.addExecutable(.{
+        .name = "cathode-run",
+        .root_module = exe_mod,
+    });
+
+    const exe = b.addExecutable(.{
+        .name = "cathode-run",
+        .root_module = exe_mod,
+    });
+    const install_exe = b.addInstallArtifact(exe, .{});
+    install_exe.step.dependOn(&install_assets.step);
+    b.getInstallStep().dependOn(&install_exe.step);
+
+    const gen_menu_bg_exe = b.addExecutable(.{
+        .name = "gen-menu-bg",
+        .root_module = gen_menu_bg_mod,
+    });
+
+    {
+        const install_shaders_dir = try z.addCompileShaders(b, .{
+            .b = zengine.builder,
+            .module = zengine.module("zengine"),
+            .options = options,
+            .optimize = optimize,
+        });
+        install_exe.step.dependOn(&install_shaders_dir.step);
+    }
+    {
+        const install_shaders_dir = try z.addCompileShaders(b, .{
+            .b = zengine.builder,
+            .src = b.path("shaders"),
+            .module = zengine.module("zengine"),
+            .options = options,
+            .optimize = optimize,
+        });
+        install_exe.step.dependOn(&install_shaders_dir.step);
     }
 
-    const check_term = b.addExecutable(.{
-        .name = "cathode-run",
-        .root_module = term_mod,
-    });
-
-    const term_exe = b.addExecutable(.{
-        .name = "cathode-run",
-        .root_module = term_mod,
-    });
-
-    b.installArtifact(term_exe);
-
     const check_step = b.step("check", "Check the app");
-    check_step.dependOn(&check_term.step);
+    check_step.dependOn(&check.step);
 
     const run_step = b.step("run", "Run the app");
-    const run_cmd = b.addRunArtifact(term_exe);
+    const run_cmd = b.addRunArtifact(exe);
+    run_cmd.step.dependOn(&install_exe.step);
     run_step.dependOn(&run_cmd.step);
 
     run_cmd.step.dependOn(b.getInstallStep());
 
-    if (b.args) |args| {
-        run_cmd.addArgs(args);
-    }
+    if (b.args) |args| run_cmd.addArgs(args);
+
+    const gen_menu_bg_step = b.step("gen-menu-bg", "Generate menu background");
+    const gen_menu_bg_cmd = b.addRunArtifact(gen_menu_bg_exe);
+    gen_menu_bg_step.dependOn(&gen_menu_bg_cmd.step);
+
+    if (b.args) |args| gen_menu_bg_cmd.addArgs(args);
 
     const mod_tests = b.addTest(.{
         .root_module = core,

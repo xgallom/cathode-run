@@ -3,7 +3,9 @@
     .version = "0.2.2",
     .fingerprint = 0xb1c5ec178b2bcc7a,
     .minimum_zig_version = "0.15.2",
-    .dependencies = .{},
+    .dependencies = .{
+        .zengine = .{ .path = "../zengine" },
+    },
     .paths = .{
         "build.zig",
         "build.zig.zon",

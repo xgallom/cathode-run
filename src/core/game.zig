@@ -42,6 +42,7 @@ pub const Dir = enum {
     pub const none = flags.none;
     pub const one = flags.one;
     pub const many = flags.many;
+    pub const all = many(&.{ .up, .right, .down, .left });
 };
 
 pub const Color = enum {
@@ -74,6 +75,8 @@ pub const CellAttr = packed struct(u8) {
 pub const SessionState = enum(u32) {
     start,
     end,
+    menu,
+    settings,
     init,
     quit,
     died,

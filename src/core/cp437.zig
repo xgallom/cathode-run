@@ -14,7 +14,7 @@ pub fn resolve(sym: u8) []const u8 {
     return result;
 }
 
-pub fn resolveUnivode(sym: u8) u32 {
+pub fn resolveUnicode(sym: u8) u32 {
     const result = raw_unicode[sym];
     log.debug("resolve {x:02} {c} -> 0x{x:04}", .{ sym, sym, result });
     return result;

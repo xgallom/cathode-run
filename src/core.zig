@@ -4,20 +4,27 @@ const assert = std.debug.assert;
 const log = std.log.scoped(.core);
 const Allocator = std.mem.Allocator;
 
+pub const cp437 = @import("core/cp437.zig");
 pub const game = @import("core/game.zig");
 pub const int = @import("core/int.zig");
 pub const param = @import("core/param.zig");
 pub const prng = @import("core/prng.zig");
+
 pub const static = @import("core/static.zig");
 pub const unit = @import("core/unit.zig");
 pub const Scratch = @import("core/Scratch.zig");
 pub const Txt = @import("core/Txt.zig");
 
+pub const state = @import("core/state.zig");
+const InputResult = state.InputResult;
+const UIState = state.UIState;
+const Frame = state.Frame;
+const GameEntity = state.GameEntity;
+const GameState = state.GameState;
+
 pub const Options = struct {
     debug: bool = builtin.mode == .Debug,
     output_symbol_table: bool = false,
-    slow: bool = false,
-    wide_gap: ?bool = null,
     random_seed: ?bool = null,
     allow_level_skip: ?bool = null,
     entity_capacity: usize = unit.KB(64).v,
@@ -31,8 +38,6 @@ pub const Options = struct {
 
 pub const cathode_run_options: Options = .{
     // .output_symbol_table = true,
-    // .wide_gap = true,
-    // .slow = true,
     .random_seed = false,
     .allow_level_skip = true,
 };
@@ -40,7 +45,7 @@ pub const cathode_run_options: Options = .{
 pub const std_options: std.Options = .{
     .log_scope_levels = &.{
         .{ .scope = .audio, .level = .info },
-        .{ .scope = .core, .level = .info },
+        .{ .scope = .core, .level = .debug },
         .{ .scope = .cp437, .level = .info },
         .{ .scope = .game, .level = .info },
         .{ .scope = .int, .level = .info },
@@ -56,148 +61,6 @@ pub const std_options: std.Options = .{
     },
 };
 
-pub const InputEvent = enum {
-    none,
-    err,
-    down,
-    up,
-    query,
-};
-
-pub const InputResult = struct {
-    event: InputEvent,
-    keycode: i32 = 0,
-
-    pub const QueryType = enum(i32) { pe = 1, da = 2 };
-
-    pub const none: @This() = .{ .event = .none };
-    pub const err: @This() = .{ .event = .err };
-
-    pub fn down(keycode: i32) @This() {
-        return .{ .event = .down, .keycode = keycode };
-    }
-
-    pub fn up(keycode: i32) @This() {
-        return .{ .event = .up, .keycode = keycode };
-    }
-
-    pub fn query(query_type: QueryType) @This() {
-        return .{ .event = .query, .keycode = @intFromEnum(query_type) };
-    }
-
-    pub fn queryType(self: @This()) QueryType {
-        assert(self.event == .query);
-        return @enumFromInt(self.keycode);
-    }
-
-    pub fn isKey(self: @This(), keys: []const u8) bool {
-        return for (keys) |key| {
-            if (key == self.keycode) break true;
-        } else false;
-    }
-};
-
-pub const Frame = struct {
-    syms: []u8,
-    attrs: []game.CellAttr,
-    duration: u64 = undefined,
-
-    pub fn init(gpa: Allocator, win_size: game.Point.U) !@This() {
-        const win_area: usize = @intCast(win_size.area());
-        const syms = try gpa.alloc(u8, win_area);
-        errdefer gpa.free(syms);
-        const attrs = try gpa.alloc(game.CellAttr, win_area);
-        errdefer gpa.free(attrs);
-        @memset(syms, 0);
-        @memset(attrs, .none);
-        return .{ .syms = syms, .attrs = attrs };
-    }
-
-    pub fn deinit(self: *@This(), gpa: Allocator) void {
-        gpa.free(self.syms);
-        gpa.free(self.attrs);
-    }
-
-    pub fn txt(self: *const @This()) Txt {
-        return .{ .head = self.syms.ptr, .tail = self.syms.ptr, .capacity = .B(self.syms.len) };
-    }
-
-    pub fn clear(self: *const @This()) void {
-        @memset(self.syms, static.sym.empty);
-        @memset(self.attrs, .none);
-    }
-
-    pub fn set(
-        self: *const @This(),
-        sym: u8,
-        attr: game.CellAttr,
-        idx: usize,
-    ) void {
-        assert(idx < self.syms.len);
-        assert(self.syms.len == self.attrs.len);
-        self.syms[idx] = sym;
-        self.attrs[idx] = attr;
-    }
-
-    pub fn setSym(
-        self: *const @This(),
-        sym: u8,
-        idx: usize,
-    ) void {
-        assert(idx < self.syms.len);
-        self.syms[idx] = sym;
-    }
-
-    pub fn write(
-        self: *const @This(),
-        syms: []const u8,
-        attr: game.CellAttr,
-        idx: usize,
-    ) void {
-        assert(idx + syms.len <= self.syms.len);
-        assert(self.syms.len == self.attrs.len);
-        @memcpy(self.syms[idx .. idx + syms.len], syms);
-        @memset(self.attrs[idx .. idx + syms.len], attr);
-    }
-
-    pub fn fill(
-        self: *const @This(),
-        len: usize,
-        sym: u8,
-        attr: game.CellAttr,
-        idx: usize,
-    ) void {
-        assert(idx + len <= self.syms.len);
-        assert(self.syms.len == self.attrs.len);
-        @memset(self.syms[idx .. idx + len], sym);
-        @memset(self.attrs[idx .. idx + len], attr);
-    }
-};
-
-pub const UIState = enum {
-    not_first_start,
-    quit,
-    skip,
-    key_down,
-    waiting_release,
-    waiting_sound,
-    sound_engine_idle_on,
-    sound_engine_x_on,
-    sound_engine_y_on,
-
-    const flags = int.Flags(@This());
-    pub const Flags = flags.U;
-    pub const none = flags.none;
-    pub const one = flags.one;
-    pub const many = flags.many;
-};
-
-pub const UISession = struct {
-    state: UIState.Flags = UIState.none,
-    input: game.Dir.Flags = game.Dir.none,
-    delay: u32 = 0,
-};
-
 pub fn transfer(self: *GameState, to: game.SessionState) !game.SessionState {
     if (self.session.state == to) {
         @branchHint(.likely);
@@ -207,13 +70,25 @@ pub fn transfer(self: *GameState, to: game.SessionState) !game.SessionState {
     log.debug("transfer: {t} -> {t}", .{ self.session.state, to });
     switch (to) {
         .start => unreachable,
-        .init => {
-            self.session.reset();
-            self.entities.clearRetainingCapacity();
+        .menu => {
             if (!int.flag.has(self.ui.state, UIState.one(.not_first_start))) {
                 try self.music_queue.appendBounded(static.asset.music.menu);
                 int.flag.set(&self.ui.state, UIState.one(.not_first_start));
             }
+            self.ui.delay = 0;
+            self.ui.start_out_delay = 0;
+            self.session.state = .menu;
+            return .menu;
+        },
+        .settings => {
+            self.ui.delay = 0;
+            self.ui.start_out_delay = 0;
+            self.session.state = .settings;
+            return .settings;
+        },
+        .init => {
+            self.session.reset();
+            self.entities.clearRetainingCapacity();
             return .init;
         },
         .intro => {
@@ -229,22 +104,21 @@ pub fn transfer(self: *GameState, to: game.SessionState) !game.SessionState {
             return .intro;
         },
         .running => {
-            self.ui.input = game.Dir.none;
-            self.session.state = .running;
             try self.sample_queue.appendBounded(.{ .start = static.asset.sample.engine_idle });
             int.flag.set(&self.ui.state, UIState.one(.sound_engine_idle_on));
             try self.music_queue.appendBounded(static.asset.music.levels[0]);
+            self.ui.input = game.Dir.none;
+            self.ui.delay = 0;
+            self.session.state = .running;
             return .running;
         },
         .paused => unreachable,
-        .died, .quit => |state| {
+        .died, .quit => |s| {
             if (int.flag.has(self.ui.state, UIState.one(.key_down))) {
                 int.flag.set(&self.ui.state, UIState.one(.waiting_release));
             } else {
                 int.flag.clr(&self.ui.state, UIState.one(.waiting_release));
             }
-            self.ui.delay = 0;
-            self.session.state = state;
             try self.sample_queue.appendBounded(.{ .stop = static.asset.sample.engine_idle });
             try self.sample_queue.appendBounded(.{ .stop = static.asset.sample.engine_x });
             try self.sample_queue.appendBounded(.{ .stop = static.asset.sample.engine_y });
@@ -253,7 +127,9 @@ pub fn transfer(self: *GameState, to: game.SessionState) !game.SessionState {
                 UIState.many(&.{ .sound_engine_idle_on, .sound_engine_x_on, .sound_engine_y_on }),
             );
             try self.music_queue.appendBounded(static.asset.music.menu);
-            return state;
+            self.ui.delay = 0;
+            self.session.state = s;
+            return s;
         },
         .end => {
             self.session.state = .end;
@@ -265,7 +141,9 @@ pub fn transfer(self: *GameState, to: game.SessionState) !game.SessionState {
 
 pub fn update(self: *GameState) !game.SessionState {
     switch (self.session.state) {
-        .start => return .init,
+        .start => return .menu,
+        .menu => return try updateMenu(self),
+        .settings => return try updateSettings(self),
         .init => return try consumeInputs(self),
         .intro => return try updateIntro(self),
         .running => return try updateRunning(self),
@@ -278,6 +156,8 @@ pub fn update(self: *GameState) !game.SessionState {
 pub fn render(self: *GameState, frame: *const Frame) !void {
     switch (self.session.state) {
         .start => frame.write(static.txt.start, static.clr.default, 0),
+        .menu => try drawMenu(self, frame),
+        .settings => try drawSettings(self, frame),
         .init => {},
         .intro => drawIntro(self, frame),
         .running => try drawRunning(self, frame),
@@ -288,32 +168,26 @@ pub fn render(self: *GameState, frame: *const Frame) !void {
 }
 
 pub fn sleep(self: *GameState) u64 {
-    switch (self.session.state) {
-        .start => return static.delay.start,
-        .running => return int.map(
+    const delay = switch (self.session.state) {
+        .start => static.delay.start,
+        .running => int.map(
             u32,
             self.session.score,
             0,
             static.score.running_delay_end,
-            if (cathode_run_options.slow)
-                static.delay.running_slow_max
-            else
-                static.delay.running_max,
-            if (cathode_run_options.slow)
-                static.delay.running_slow_min
-            else
-                static.delay.running_min,
+            self.settings.delay_running_max,
+            self.settings.delay_running_min,
         ),
-        .intro, .died, .quit => self.ui.delay += static.delay.step,
-        else => {},
-    }
-    return static.delay.step;
+        else => static.delay.step,
+    };
+    if (self.ui.update_delay) self.ui.delay += delay;
+    return unit.us(delay).toNs();
 }
 
 fn consumeInputs(self: *GameState) !game.SessionState {
     var input_len: usize = 0;
-    for (self.input_buf) |input| {
-        switch (input.event) {
+    for (self.input_buf) |in| {
+        switch (in.event) {
             .none => break,
             .err => return error.InputFailed,
             .down => int.flag.set(&self.ui.state, UIState.one(.key_down)),
@@ -325,18 +199,107 @@ fn consumeInputs(self: *GameState) !game.SessionState {
     return if (input_len < self.input_buf.len - 1) .intro else .init;
 }
 
+fn updateMenu(self: *GameState) !game.SessionState {
+    if (self.ui.delay <= static.delay.menu_in) {
+        _ = try consumeInputs(self);
+        return .menu;
+    }
+    if (self.ui.start_out_delay != 0) {
+        const out_delay = self.ui.start_out_delay;
+        if (self.ui.delay >= out_delay + static.delay.menu_out) switch (self.ui.active_idx) {
+            0 => return .init,
+            1 => {
+                self.ui.active_idx = 0;
+                return .settings;
+            },
+            2 => return .end,
+            else => unreachable,
+        };
+        _ = try consumeInputs(self);
+        return .menu;
+    }
+
+    for (self.input_buf) |in| switch (in.event) {
+        .none => break,
+        .err => return error.InputFailed,
+        .down => if (in.isKey(&static.key.down)) {
+            try self.sample_queue.appendBounded(.{ .start = static.asset.sample.activate });
+            if (self.ui.active_idx < static.txt.menu_options.len - 1) self.ui.active_idx += 1;
+        } else if (in.isKey(&static.key.up)) {
+            try self.sample_queue.appendBounded(.{ .start = static.asset.sample.activate });
+            if (self.ui.active_idx > 0) self.ui.active_idx -= 1;
+        } else if (in.isKey(&static.key.accept)) {
+            try self.sample_queue.appendBounded(.{ .start = static.asset.sample.activate });
+            self.ui.start_out_delay = self.ui.delay;
+        },
+        .up => {},
+        .query => {},
+    };
+
+    return .menu;
+}
+
+fn updateSettings(self: *GameState) !game.SessionState {
+    if (self.ui.delay <= static.delay.settings_in) {
+        _ = try consumeInputs(self);
+        return .settings;
+    }
+    if (self.ui.start_out_delay != 0) {
+        const out_delay = self.ui.start_out_delay;
+        if (self.ui.delay >= out_delay + static.delay.settings_out) {
+            self.ui.active_idx = 1;
+            return .menu;
+        }
+        _ = try consumeInputs(self);
+        return .settings;
+    }
+
+    for (self.input_buf) |in| switch (in.event) {
+        .none => break,
+        .err => return error.InputFailed,
+        .down => if (in.isKey(&static.key.down)) {
+            try self.sample_queue.appendBounded(.{ .start = static.asset.sample.activate });
+            if (self.ui.active_idx < static.txt.settings_options.len - 1) self.ui.active_idx += 1;
+        } else if (in.isKey(&static.key.up)) {
+            try self.sample_queue.appendBounded(.{ .start = static.asset.sample.activate });
+            if (self.ui.active_idx > 0) self.ui.active_idx -= 1;
+        } else if (in.isKey(&static.key.left)) {
+            try self.sample_queue.appendBounded(.{ .start = static.asset.sample.activate });
+            const value = &self.ui.settings[self.ui.active_idx];
+            if (value.* > 0) value.* -= 1;
+        } else if (in.isKey(&static.key.right)) {
+            try self.sample_queue.appendBounded(.{ .start = static.asset.sample.activate });
+            const value = &self.ui.settings[self.ui.active_idx];
+            const max: u32 = switch (self.ui.active_idx) {
+                0 => 2,
+                1 => 1,
+                2, 3, 4 => 10,
+                else => unreachable,
+            };
+            if (value.* < max) value.* += 1;
+        } else if (in.isKey(&static.key.accept)) {
+            try self.sample_queue.appendBounded(.{ .start = static.asset.sample.activate });
+            self.ui.start_out_delay = self.ui.delay;
+        },
+        .up => {},
+        .query => {},
+    };
+
+    return .settings;
+}
+
 fn updateIntro(self: *GameState) !game.SessionState {
     if (self.ui.delay >= static.delay.intro) {
         return if (int.flag.has(self.ui.state, UIState.one(.quit))) .end else .running;
     }
 
-    for (self.input_buf) |input| switch (input.event) {
+    for (self.input_buf) |in| switch (in.event) {
         .none => break,
         .err => return error.InputFailed,
         .down => int.flag.set(&self.ui.state, UIState.one(.key_down)),
-        .up => if (input.keycode != '\r') {
+        .up => {
             if (!int.flag.has(self.ui.state, UIState.one(.waiting_release))) {
-                if (input.isKey(&static.key.quit)) {
+                if (in.isKey(&static.key.quit)) {
                     if (int.flag.has(self.ui.state, UIState.one(.quit))) {
                         return .end;
                     } else {
@@ -344,9 +307,9 @@ fn updateIntro(self: *GameState) !game.SessionState {
                     }
                 }
                 int.flag.set(&self.ui.state, UIState.one(.skip));
+                try self.sample_queue.appendBounded(.{ .start = static.asset.sample.activate });
             }
             int.flag.clr(&self.ui.state, UIState.many(&.{ .key_down, .waiting_release }));
-            try self.sample_queue.appendBounded(.{ .start = static.asset.sample.activate });
         },
         .query => {},
     };
@@ -375,46 +338,46 @@ fn updateRunning(self: *GameState) !game.SessionState {
     self.session.score += 1;
     var score = self.session.score;
 
-    for (self.input_buf, 0..) |input, n| switch (input.event) {
+    for (self.input_buf, 0..) |in, n| switch (in.event) {
         .none => if (n == self.input_buf.len - 1) return error.InputBufferOverflow else break,
         .err => return error.InputFailed,
-        .down => if (input.isKey(&static.key.up)) int.flag.set(
+        .down => if (in.isKey(&static.key.up)) int.flag.set(
             &self.ui.input,
             game.Dir.one(.up),
-        ) else if (input.isKey(&static.key.right)) int.flag.set(
+        ) else if (in.isKey(&static.key.right)) int.flag.set(
             &self.ui.input,
             game.Dir.one(.right),
-        ) else if (input.isKey(&static.key.down)) int.flag.set(
+        ) else if (in.isKey(&static.key.down)) int.flag.set(
             &self.ui.input,
             game.Dir.one(.down),
-        ) else if (input.isKey(&static.key.left)) int.flag.set(
+        ) else if (in.isKey(&static.key.left)) int.flag.set(
             &self.ui.input,
             game.Dir.one(.left),
         ),
-        .up => if (input.isKey(&static.key.up)) int.flag.clr(
+        .up => if (in.isKey(&static.key.up)) int.flag.clr(
             &self.ui.input,
             game.Dir.one(.up),
-        ) else if (input.isKey(&static.key.right)) int.flag.clr(
+        ) else if (in.isKey(&static.key.right)) int.flag.clr(
             &self.ui.input,
             game.Dir.one(.right),
-        ) else if (input.isKey(&static.key.down)) int.flag.clr(
+        ) else if (in.isKey(&static.key.down)) int.flag.clr(
             &self.ui.input,
             game.Dir.one(.down),
-        ) else if (input.isKey(&static.key.left)) int.flag.clr(
+        ) else if (in.isKey(&static.key.left)) int.flag.clr(
             &self.ui.input,
             game.Dir.one(.left),
-        ) else if (input.isKey(&static.key.quit)) {
+        ) else if (in.isKey(&static.key.quit)) {
             // TODO: Animation
             int.flag.set(&self.ui.state, UIState.one(.quit));
             try self.sample_queue.appendBounded(.{ .start = static.asset.sample.activate });
             try self.sample_queue.appendBounded(.{ .start = static.asset.sample.woosh });
             return .quit;
-        } else if (input.isKey(&static.key.dbg_prev_lvl)) {
+        } else if (in.isKey(&static.key.dbg_prev_lvl)) {
             if (comptime allow_level_skip) {
                 score = if (static.score.level(score) > 1) static.score.level_1 else 1;
                 self.session.score = score;
             }
-        } else if (input.isKey(&static.key.db_next_lvl)) {
+        } else if (in.isKey(&static.key.db_next_lvl)) {
             if (comptime allow_level_skip) {
                 const level = static.score.level(score);
                 score = if (level < 1)
@@ -465,7 +428,9 @@ fn updateRunning(self: *GameState) !game.SessionState {
             .{ score -| pp.y, pp.x, self.road_left[pp.y], self.road_right[pp.y] },
         );
         if (pp.x < self.road_left[pp.y] or pp.x > self.road_right[pp.y]) {
-            if (self.ui.input != game.Dir.none) int.flag.set(&self.ui.state, UIState.one(.key_down));
+            if (self.ui.input != game.Dir.none) {
+                int.flag.set(&self.ui.state, UIState.one(.key_down));
+            }
             try self.sample_queue.appendBounded(.{ .start = static.asset.sample.explosion });
             return .died;
         }
@@ -494,13 +459,17 @@ fn updateRunning(self: *GameState) !game.SessionState {
         if (has_y < 0 and int.flag.has(self.ui.state, UIState.one(.sound_engine_idle_on))) {
             try self.sample_queue.appendBounded(.{ .stop = static.asset.sample.engine_idle });
             int.flag.clr(&self.ui.state, UIState.one(.sound_engine_idle_on));
-        } else if (has_y >= 0 and !int.flag.has(self.ui.state, UIState.one(.sound_engine_idle_on))) {
+        } else if (has_y >= 0 and
+            !int.flag.has(self.ui.state, UIState.one(.sound_engine_idle_on)))
+        {
             try self.sample_queue.appendBounded(.{ .start = static.asset.sample.engine_idle });
             int.flag.set(&self.ui.state, UIState.one(.sound_engine_idle_on));
         }
 
         blk: {
+            const y = score -| (pp.y + 1);
             if (has_y < 0 and has_x == 0) break :blk;
+            if (y <= 1) break :blk;
             const mod: u32 = switch (has_y) {
                 -1 => 3,
                 0 => 2,
@@ -508,7 +477,6 @@ fn updateRunning(self: *GameState) !game.SessionState {
                 else => unreachable,
             };
             if (score % mod == 0) {
-                const y = score -| (pp.y + 1);
                 const level = static.score.level(y);
                 try self.entities.appendBounded(.{
                     .state = GameEntity.State.default,
@@ -531,18 +499,18 @@ fn updateRunning(self: *GameState) !game.SessionState {
 
 fn updateScore(self: *GameState) !game.SessionState {
     if (self.ui.delay >= static.delay.score) {
-        return if (int.flag.has(self.ui.state, UIState.one(.quit))) .end else .init;
+        return if (int.flag.has(self.ui.state, UIState.one(.quit))) .end else .menu;
     }
 
-    for (self.input_buf) |input| switch (input.event) {
+    for (self.input_buf) |in| switch (in.event) {
         .none => break,
         .err => return error.InputFailed,
         .down => int.flag.set(&self.ui.state, UIState.one(.key_down)),
-        .up => if (input.keycode != '\r') {
-            if (!int.flag.has(self.ui.state, UIState.one(.waiting_release)) and
-                self.ui.delay > static.delay.score_in)
+        .up => {
+            if (self.ui.delay > static.delay.score_in and
+                !int.flag.has(self.ui.state, UIState.one(.waiting_release)))
             {
-                if (input.isKey(&static.key.quit)) {
+                if (in.isKey(&static.key.quit)) {
                     if (int.flag.has(self.ui.state, UIState.one(.quit))) {
                         return .end;
                     } else {
@@ -563,6 +531,283 @@ fn updateScore(self: *GameState) !game.SessionState {
     }
 
     return self.session.state;
+}
+
+fn drawMenu(self: *GameState, frame: *const Frame) !void {
+    const sdelay = static.delay;
+    const clr = static.clr;
+    const stxt = static.txt;
+    const height_full: i32 = @intCast(self.session.heightFull());
+    const menu_y = 10;
+    const size = self.session.size;
+    const sizei = size.i();
+    const fdelay: f32 = @floatFromInt(self.ui.delay);
+    if (self.ui.delay < sdelay.menu_in) {
+        const t = param.ease(.se, 3, param.invLerp(0, sdelay.menu_in, fdelay));
+        var y_max: u32 = @intFromFloat(@round(
+            param.lerp(0, @floatFromInt(height_full), param.sat(param.invLerp(0, 0.4, t))),
+        ));
+        frame.write(stxt.menu_bg[0 .. size.x * y_max], clr.menu_bg, 0);
+
+        const txt_t = param.sat(param.invLerp(0.4, 1, t));
+        var msg: []const u8 = stxt.menu_title;
+        var msg_y: u32 = menu_y;
+        var len: i32 = @intFromFloat(@round(param.lerp(0, @floatFromInt(msg.len), txt_t)));
+        frame.write(
+            msg[0..@intCast(len)],
+            clr.menu_title,
+            int.idx2D(msg_y, @as(u32, @intCast(int.center(len, sizei.x))), size.x),
+        );
+        y_max = @intFromFloat(@round(param.lerp(0, @floatFromInt(stxt.menu_options.len), txt_t)));
+        msg_y = menu_y + 6;
+        for (stxt.menu_options[0..y_max], 0..) |option, n| {
+            msg = option;
+            len = @intCast(msg.len);
+            frame.write(
+                msg[0..@intCast(len)],
+                if (n == self.ui.active_idx) clr.menu_active else clr.menu_item,
+                int.idx2D(msg_y + n, @as(u32, @intCast(int.center(len, sizei.x))), size.x),
+            );
+        }
+    } else if (self.ui.start_out_delay != 0) {
+        const delay_out_0 = self.ui.start_out_delay;
+        const t = param.ease(.s, 3, param.invLerp(
+            @floatFromInt(delay_out_0),
+            @floatFromInt(delay_out_0 + sdelay.menu_out),
+            fdelay,
+        ));
+
+        var y_max: u32 = @intFromFloat(@round(
+            param.lerp(
+                0,
+                @floatFromInt(height_full),
+                param.inv(param.sat(param.invLerp(0.6, 1, t))),
+            ),
+        ));
+        frame.write(stxt.menu_bg[0 .. size.x * y_max], clr.menu_bg, 0);
+
+        const txt_t = param.sat(param.invLerp(0, 0.6, t));
+        var msg: []const u8 = stxt.menu_title;
+        var msg_y: u32 = menu_y;
+        var len: i32 = @as(i32, @intCast(msg.len)) - @as(i32, @intFromFloat(@round(
+            param.lerp(0, @floatFromInt(msg.len), txt_t),
+        )));
+        frame.write(
+            msg[0..@intCast(len)],
+            clr.menu_title,
+            int.idx2D(msg_y, @as(u32, @intCast(int.center(len, sizei.x))), size.x),
+        );
+        y_max = @as(u32, @intCast(stxt.menu_options.len)) - @as(u32, @intFromFloat(
+            @round(param.lerp(0, @floatFromInt(stxt.menu_options.len), txt_t)),
+        ));
+        msg_y = menu_y + 6;
+        for (stxt.menu_options[0..y_max], 0..) |option, n| {
+            msg = option;
+            len = @intCast(msg.len);
+            frame.write(
+                msg[0..@intCast(len)],
+                if (n == self.ui.active_idx) clr.menu_active else clr.menu_item,
+                int.idx2D(msg_y + n, @as(u32, @intCast(int.center(len, sizei.x))), size.x),
+            );
+        }
+    } else {
+        frame.write(stxt.menu_bg, clr.menu_bg, 0);
+        var msg: []const u8 = stxt.menu_title;
+        var msg_y: u32 = menu_y;
+        var len: i32 = @intCast(msg.len);
+        frame.write(
+            msg[0..@intCast(len)],
+            clr.menu_title,
+            int.idx2D(msg_y, @as(u32, @intCast(int.center(len, sizei.x))), size.x),
+        );
+        msg_y = menu_y + 6;
+        for (stxt.menu_options, 0..) |option, n| {
+            msg = option;
+            len = @intCast(msg.len);
+            frame.write(
+                msg,
+                if (n == self.ui.active_idx) clr.menu_active else clr.menu_item,
+                int.idx2D(msg_y + n, @as(u32, @intCast(int.center(len, sizei.x))), size.x),
+            );
+        }
+    }
+}
+
+fn drawSettings(self: *GameState, frame: *const Frame) !void {
+    const sdelay = static.delay;
+    const clr = static.clr;
+    const stxt = static.txt;
+    const height_full: i32 = @intCast(self.session.heightFull());
+    const menu_y = 10;
+    const size = self.session.size;
+    const sizei = size.i();
+    const fdelay: f32 = @floatFromInt(self.ui.delay);
+    if (self.ui.delay < sdelay.settings_in) {
+        const t = param.ease(.se, 3, param.invLerp(0, sdelay.settings_in, fdelay));
+        var y_max: u32 = @intFromFloat(@round(
+            param.lerp(0, @floatFromInt(height_full), param.sat(param.invLerp(0, 0.4, t))),
+        ));
+        frame.write(stxt.menu_bg[0 .. size.x * y_max], clr.menu_bg, 0);
+
+        const txt_t = param.sat(param.invLerp(0.4, 1, t));
+        var msg: []const u8 = stxt.settings_title;
+        var msg_y: u32 = menu_y;
+        var len: i32 = @intFromFloat(@round(param.lerp(0, @floatFromInt(msg.len), txt_t)));
+        frame.write(
+            msg[0..@intCast(len)],
+            clr.menu_title,
+            int.idx2D(msg_y, @as(u32, @intCast(int.center(len, sizei.x))), size.x),
+        );
+        y_max = @intFromFloat(@round(
+            param.lerp(0, @floatFromInt(stxt.settings_options.len), txt_t),
+        ));
+        msg_y = menu_y + 5;
+        for (stxt.settings_options[0..y_max], 0..) |option, n| {
+            msg = option;
+            len = @intCast(msg.len);
+            const x: u32 = @intCast(int.center(len + 19, sizei.x));
+            frame.write(
+                msg,
+                if (n == self.ui.active_idx) clr.menu_active else clr.menu_item,
+                int.idx2D(msg_y + n, x, size.x),
+            );
+            try drawSetting(self, frame, n, x);
+        }
+    } else if (self.ui.start_out_delay != 0) {
+        const delay_out_0 = self.ui.start_out_delay;
+        const t = param.ease(.s, 3, param.invLerp(
+            @floatFromInt(delay_out_0),
+            @floatFromInt(delay_out_0 + sdelay.settings_out),
+            fdelay,
+        ));
+
+        var y_max: u32 = @intFromFloat(@round(
+            param.lerp(
+                0,
+                @floatFromInt(height_full),
+                param.inv(param.sat(param.invLerp(0.6, 1, t))),
+            ),
+        ));
+        frame.write(stxt.menu_bg[0 .. size.x * y_max], clr.menu_bg, 0);
+
+        const txt_t = param.sat(param.invLerp(0, 0.6, t));
+        var msg: []const u8 = stxt.settings_title;
+        var msg_y: u32 = menu_y;
+        var len: i32 = @as(i32, @intCast(msg.len)) - @as(i32, @intFromFloat(@round(
+            param.lerp(0, @floatFromInt(msg.len), txt_t),
+        )));
+        frame.write(
+            msg[0..@intCast(len)],
+            clr.menu_title,
+            int.idx2D(msg_y, @as(u32, @intCast(int.center(len, sizei.x))), size.x),
+        );
+        y_max = @as(u32, @intCast(stxt.settings_options.len)) - @as(u32, @intFromFloat(@round(
+            param.lerp(0, @floatFromInt(stxt.settings_options.len), txt_t),
+        )));
+        msg_y = menu_y + 5;
+        for (stxt.settings_options[0..y_max], 0..) |option, n| {
+            msg = option;
+            len = @intCast(msg.len);
+            const x: u32 = @intCast(int.center(len + 19, sizei.x));
+            frame.write(
+                msg,
+                if (n == self.ui.active_idx) clr.menu_active else clr.menu_item,
+                int.idx2D(msg_y + n, x, size.x),
+            );
+            try drawSetting(self, frame, n, x);
+        }
+    } else {
+        frame.write(stxt.menu_bg, clr.menu_bg, 0);
+        var msg: []const u8 = stxt.settings_title;
+        var msg_y: u32 = menu_y;
+        var len: i32 = @intCast(msg.len);
+        frame.write(
+            msg[0..@intCast(len)],
+            clr.menu_title,
+            int.idx2D(msg_y, @as(u32, @intCast(int.center(len, sizei.x))), size.x),
+        );
+        msg_y = menu_y + 5;
+        for (stxt.settings_options, 0..) |option, n| {
+            msg = option;
+            len = @intCast(msg.len);
+            const x: u32 = @intCast(int.center(len + 19, sizei.x));
+            frame.write(
+                msg,
+                if (n == self.ui.active_idx) clr.menu_active else clr.menu_item,
+                int.idx2D(msg_y + n, x, size.x),
+            );
+            try drawSetting(self, frame, n, x);
+        }
+    }
+}
+
+fn drawSetting(self: *GameState, frame: *const Frame, n: usize, x: u32) !void {
+    const clr = static.clr;
+    const stxt = static.txt;
+    const menu_y = 10;
+    const size = self.session.size;
+    const value = self.ui.settings[n];
+    const x0 = x + 14;
+    const attr_active = if (n == self.ui.active_idx) clr.menu_active_hl else clr.menu_item_hl;
+    const attr_item = if (n == self.ui.active_idx) clr.menu_active else clr.menu_item;
+    // "WIDE NORMAL NARROW"
+    // "   SLOW NORMAL    "
+    // "[0123456789  100% "
+    const msg_y = menu_y + 5;
+    switch (n) {
+        0 => {
+            frame.write(
+                stxt.settings_widths[0],
+                if (value == 0) attr_active else attr_item,
+                int.idx2D(msg_y + n, x0, size.x),
+            );
+            frame.write(
+                stxt.settings_widths[1],
+                if (value == 1) attr_active else attr_item,
+                int.idx2D(msg_y + n, x0 + stxt.settings_widths[0].len + 1, size.x),
+            );
+            frame.write(
+                stxt.settings_widths[2],
+                if (value == 2) attr_active else attr_item,
+                int.idx2D(msg_y + n, x0 + stxt.settings_widths[0].len +
+                    stxt.settings_widths[1].len + 2, size.x),
+            );
+        },
+        1 => {
+            frame.write(
+                stxt.settings_game_speeds[0],
+                if (value == 0) attr_active else attr_item,
+                int.idx2D(msg_y + n, x0 + 3, size.x),
+            );
+            frame.write(
+                stxt.settings_game_speeds[1],
+                if (value == 1) attr_active else attr_item,
+                int.idx2D(
+                    msg_y + n,
+                    x0 + stxt.settings_game_speeds[0].len + 4,
+                    size.x,
+                ),
+            );
+        },
+        2, 3, 4 => {
+            frame.fill(
+                10,
+                static.sym.empty_bar,
+                attr_item,
+                int.idx2D(msg_y + n, x0 + 1, size.x),
+            );
+            frame.fill(
+                value,
+                static.sym.full_bar,
+                attr_active,
+                int.idx2D(msg_y + n, x0 + 1, size.x),
+            );
+            const text = try self.scratch.print("{d:3}%", .{100 * value / 10});
+            defer self.scratch.free(text);
+            frame.write(text, attr_item, int.idx2D(msg_y + n, x0 + 12, size.x));
+        },
+        else => unreachable,
+    }
 }
 
 fn drawIntro(self: *GameState, frame: *const Frame) void {
@@ -669,7 +914,10 @@ fn drawRunning(self: *GameState, frame: *const Frame) !void {
             if (score_y + y_off > yt) continue;
             if (score_y + y_off <= yb) continue;
             const y: u32 = @intCast(yt - (score_y + y_off));
-            log.debug("{} {} {} {} {} {}", .{ score, idx, score_y + y_off, y, entity.sym, y * size.x + entity.pos.x });
+            log.debug(
+                "{} {} {} {} {} {}",
+                .{ score, idx, score_y + y_off, y, entity.sym, y * size.x + entity.pos.x },
+            );
             frame.set(
                 entity.sym,
                 entity.attr,
@@ -771,7 +1019,11 @@ fn drawScore(self: *GameState, frame: *const Frame) !void {
 
         if (has_bg) {
             const y_max: u32 = @intFromFloat(@round(
-                param.lerp(0, @floatFromInt(height_full), param.inv(param.sat(param.invLerp(0.6, 1, t)))),
+                param.lerp(
+                    0,
+                    @floatFromInt(height_full),
+                    param.inv(param.sat(param.invLerp(0.6, 1, t))),
+                ),
             ));
             frame.fill(size.x * y_max, static.sym.empty, attr, 0);
         }
@@ -812,326 +1064,3 @@ fn drawScore(self: *GameState, frame: *const Frame) !void {
         );
     }
 }
-
-pub const GameEntity = struct {
-    state: State.Flags = State.none,
-    pos: game.Point.U,
-    parallax_y: i32 = 0,
-    sym: u8,
-    attr: game.CellAttr,
-
-    pub const State = enum {
-        exists,
-
-        const flags = int.Flags(@This());
-        pub const Flags = flags.U;
-        pub const none = flags.none;
-        pub const default: Flags = one(.exists);
-        pub const one = flags.one;
-        pub const many = flags.many;
-    };
-};
-
-pub const GameState = struct {
-    ui: UISession = .{},
-    session: *game.Session,
-    prng: prng.Batch = .init,
-    path: game.PathConfig = undefined,
-    scratch: Scratch,
-    sym_map: [*]u8,
-    road_left: [*]u32,
-    road_right: [*]u32,
-    row_rng: [*]prng.Batch.U,
-    input_buf: *[cathode_run_options.input_buf_length]InputResult,
-    entities: std.ArrayList(GameEntity),
-    sample_queue: std.ArrayList(SampleCommand),
-    music_queue: std.ArrayList(?[]const u8),
-
-    pub const SampleCommand = union(enum) { start: []const u8, stop: []const u8 };
-
-    pub fn init(gpa: Allocator, win_size: game.Point.U) !@This() {
-        const session = try gpa.create(game.Session);
-        session.* = try .init(win_size);
-        errdefer gpa.destroy(session);
-        var scratch: Scratch = try .init(gpa);
-        errdefer scratch.deinit(gpa);
-        const sym_map = try gpa.alloc(u8, @intCast(session.size.area()));
-        errdefer gpa.free(sym_map);
-        const road_left = try gpa.alloc(u32, session.size.y);
-        errdefer gpa.free(road_left);
-        const road_right = try gpa.alloc(u32, session.size.y);
-        errdefer gpa.free(road_right);
-        const row_rng = try gpa.alloc(prng.Batch.U, session.size.x);
-        errdefer gpa.free(row_rng);
-        const input_buf = try gpa.create([cathode_run_options.input_buf_length]InputResult);
-        errdefer gpa.destroy(input_buf);
-        const entities = try gpa.alloc(GameEntity, cathode_run_options.entity_capacity);
-        errdefer gpa.free(entities);
-        const sample_queue = try gpa.alloc(SampleCommand, cathode_run_options.sample_queue_length);
-        errdefer gpa.free(sample_queue);
-        const music_queue = try gpa.alloc(?[]const u8, cathode_run_options.music_queue_length);
-        errdefer gpa.free(sample_queue);
-        return .{
-            .session = session,
-            .scratch = scratch,
-            .sym_map = sym_map.ptr,
-            .road_left = road_left.ptr,
-            .road_right = road_right.ptr,
-            .row_rng = row_rng.ptr,
-            .input_buf = input_buf,
-            .entities = .initBuffer(entities),
-            .sample_queue = .initBuffer(sample_queue),
-            .music_queue = .initBuffer(music_queue),
-        };
-    }
-
-    pub fn deinit(self: *@This(), gpa: Allocator) void {
-        self.scratch.deinit(gpa);
-        gpa.free(self.symMap());
-        gpa.free(self.roadLeft());
-        gpa.free(self.roadRight());
-        gpa.free(self.rowRng());
-        gpa.destroy(self.input_buf);
-        gpa.destroy(self.session);
-        self.entities.deinit(gpa);
-        self.sample_queue.deinit(gpa);
-        self.music_queue.deinit(gpa);
-        self.* = undefined;
-    }
-
-    fn reset(self: *@This()) void {
-        // periods in Q20 (IA angle + Q10 period)
-        // amplitudes in Q6
-        // wave in Q20 (Q14 sin + Q6 amplitude)
-        // 0.6 * sin(0.07 * t) + 0.4 * cos(0.03 * t)
-        // target values for seed 0: 11682 5007 38 26
-        self.prng.seed(self.session.seed, self.session.score);
-        var prng_r: prng.Row = undefined;
-        self.prng.compact(&prng_r, rngIdxForScore(self.session.score));
-        self.path.p1 = @intCast(prng_r.range(9349, 15449));
-        self.path.p2 = @intCast(prng_r.range(3737, 5737));
-        self.path.amp1 = prng_r.range(29, 57);
-        self.path.amp2 = 64 - self.path.amp1;
-        log.info(
-            "path: {} {} {} {}",
-            .{ self.path.p1, self.path.p2, self.path.amp1, self.path.amp2 },
-        );
-        @memset(self.symMap(), static.sym.gnd);
-        // const wall = static.sym.dbl_walls[game.Dir.many(&.{ .up, .down })];
-        for (0..self.session.size.y) |y| {
-            self.road_left[y] = 0;
-            self.road_right[y] = self.session.size.x - 1;
-            // self.sym_map[y * self.session.size.x] = wall;
-            // self.sym_map[(y + 1) * self.session.size.x - 1] = wall;
-        }
-    }
-
-    fn advance(self: *@This()) !void {
-        const score = self.session.score;
-        const seed = self.session.seed;
-        const size = self.session.size;
-        log.debug("advance @{}", .{score});
-        comptime assert(prng.Batch.len >= 2);
-        if (rngIdxForScore(score) == 0) {
-            self.prng.seed(seed, score);
-            self.prng.generate(self.rowRng());
-        }
-        const sym_map = self.symMap();
-        const road_left = self.roadLeft();
-        const road_right = self.roadRight();
-        @memmove(sym_map[size.x..], sym_map[0 .. sym_map.len - size.x]);
-        @memmove(road_left[1..], road_left[0 .. road_left.len - 1]);
-        @memmove(road_right[1..], road_right[0 .. road_right.len - 1]);
-        try self.generateGameRow();
-    }
-
-    // ------  ROAD  -----------
-    // |_0   |      |          |_WIDTH - 1
-    //       |      |
-    //       |      |_ gap_pos + gap_width
-    //       |      |_ road_right
-    //       |
-    //       |_ gap_pos
-    //       |_ road_left
-
-    fn generateGameRow(self: *@This()) !void {
-        const sym = static.sym;
-        const dblWallsLookup = sym.dblWallsLookup;
-        const Dir = game.Dir;
-        const Q = int.Q;
-
-        const score = self.session.score;
-        const size = self.session.size;
-        const rng_idx = rngIdxForScore(score);
-
-        const bounds = self.generateRoadBounds(score, rng_idx);
-        const next_bounds = self.generateRoadBounds(score + 1, rng_idx + 1);
-        _ = next_bounds;
-        const road_left = bounds.road_left;
-        const road_right = bounds.road_right;
-        self.road_left[0] = road_left;
-        self.road_right[0] = road_right;
-        const map = self.symMap();
-
-        @memset(map[road_left .. road_right + 1], sym.gnd);
-
-        const level = static.score.level(score);
-        const lvl_scale = Q(8).to(1 + level);
-        {
-            const begin = road_left - 1;
-            const end = 1;
-            var walk = Dir.none;
-            var x = begin;
-            while (x >= end) : (x -= 1) {
-                const dist = @min(begin -| x, 4);
-                const r = walk;
-                const d = dblWallsLookup(map[size.x + x]);
-                var walls = Dir.none;
-                const row_rng: [prng.Batch.len]u32 = self.row_rng[x];
-                const rng = row_rng[rng_idx];
-                const rng_p: u32 = Q(10).mod(rng);
-                const is_spawn = Q(10).round(rng_p * lvl_scale) >= Q(10).midperiod;
-                const is_d_up = int.flag.mask(d, Dir.one(.up));
-                const is_r_left = int.flag.mask(r, Dir.one(.left));
-                if (is_spawn | ((d | r) == Dir.none) | ((is_d_up | is_r_left) != 0)) {
-                    const rng_u: u32 = Q(10).mod(rng >> Q(10).bits);
-                    const rng_l: u32 = Q(10).mod(rng >> 2 * Q(10).bits);
-                    const is_u_rng_m = Q(4).tu(Q(10).round(rng_u * dist * lvl_scale) >= 1297);
-                    const is_l_rng_m = Q(4).tu(Q(10).round(rng_l * lvl_scale) >= 897);
-                    const is_d_up_m = Q(4).nzu(is_d_up);
-                    const is_r_left_m = Q(4).nzu(is_r_left);
-                    int.flag.set(&walls, Dir.one(.up) & is_u_rng_m);
-                    int.flag.set(&walls, Dir.one(.right) & is_r_left_m);
-                    int.flag.set(&walls, Dir.one(.down) & is_d_up_m);
-                    int.flag.set(&walls, Dir.one(.left) & is_l_rng_m);
-                    const is_override_m = Q(4).tu((walls & (walls -% 1)) == 0);
-                    int.flag.set(&walls, Dir.many(&.{ .up, .left }) & is_override_m);
-                }
-                map[x] = sym.dbl_walls[walls];
-                walk = walls;
-            }
-            map[x] = sym.dbl_walls[
-                Dir.many(&.{ .up, .down }) | int.select(u8, Dir.one(.right), Dir.none, Q(8).tu(
-                    int.flag.has(walk, Dir.one(.left)),
-                ))
-            ];
-        }
-
-        {
-            const begin = road_left;
-            const end = road_right;
-            const road_w = end + 1 - begin;
-            const row_rng: [prng.Batch.len]u32 = self.row_rng[(end + begin) / 2];
-            const rng = row_rng[rng_idx];
-            const rng_obs = Q(8).mod(rng);
-            const obs_pos_rng = Q(16).mod(rng >> Q(8).bits);
-            const obs_x = begin + obs_pos_rng % road_w;
-            if (rng_obs < 8 + Q(10).round(score * 12 * road_w)) try self.entities.appendBounded(.{
-                .state = GameEntity.State.default,
-                .pos = .{ .x = obs_x, .y = score },
-                .sym = sym.void_stone,
-                .attr = static.clr.gnds[level],
-            });
-        }
-
-        {
-            const begin = road_right + 1;
-            const end = size.x - 2;
-            var walk = Dir.none;
-            for (begin..end + 1) |x| {
-                const dist = @min(x - begin, 4);
-                const l = walk;
-                const d = dblWallsLookup(map[size.x + x]);
-                var walls = Dir.none;
-                const row_rng: [prng.Batch.len]u32 = self.row_rng[x];
-                const rng = row_rng[rng_idx];
-                const rng_p: u32 = Q(10).mod(rng);
-                const is_spawn = Q(10).round(rng_p * lvl_scale) >= Q(10).midperiod;
-                const is_d_up = int.flag.mask(d, Dir.one(.up));
-                const is_l_right = int.flag.mask(l, Dir.one(.right));
-                if (is_spawn | ((d | l) == Dir.none) | ((is_d_up | is_l_right) != 0)) {
-                    const rng_u: u32 = Q(10).mod(rng >> Q(10).bits);
-                    const rng_r: u32 = Q(10).mod(rng >> 2 * Q(10).bits);
-                    const is_u_rng_m = Q(4).tu(Q(10).round(rng_u * dist * lvl_scale) >= 1297);
-                    const is_r_rng_m = Q(4).tu(Q(10).round(rng_r * lvl_scale) >= 897);
-                    const is_d_up_m = Q(4).nzu(is_d_up);
-                    const is_l_right_m = Q(4).nzu(is_l_right);
-                    int.flag.set(&walls, Dir.one(.up) & is_u_rng_m);
-                    int.flag.set(&walls, Dir.one(.right) & is_r_rng_m);
-                    int.flag.set(&walls, Dir.one(.down) & is_d_up_m);
-                    int.flag.set(&walls, Dir.one(.left) & is_l_right_m);
-                    const is_override_m = Q(4).tu((walls & (walls -% 1)) == 0);
-                    int.flag.set(&walls, Dir.many(&.{ .up, .right }) & is_override_m);
-                }
-                map[x] = sym.dbl_walls[walls];
-                walk = walls;
-            }
-            map[end + 1] = sym.dbl_walls[
-                Dir.many(&.{ .up, .down }) | int.select(u8, Dir.one(.left), Dir.none, Q(8).tu(
-                    int.flag.has(walk, Dir.one(.right)),
-                ))
-            ];
-        }
-    }
-
-    fn generateRoadBounds(
-        self: *@This(),
-        score: u32,
-        idx: u32,
-    ) struct { road_left: u32, road_right: u32 } {
-        // TODO: Verify this behaves consistently between frames
-        const Q = int.Q;
-        const gap_width = int.map(
-            i32,
-            @intCast(score),
-            0,
-            static.score.gap_width_end,
-            static.gap_width.max,
-            static.gap_width.min,
-        );
-        var prng_r: prng.Row = undefined;
-        self.prng.compact(&prng_r, idx);
-        const skew = prng_r.bound(static.score.level(score) + 1);
-        const gap_pos = blk: {
-            const path = self.path;
-            const wave = path.amp1 * int.sin(Q(10).mod(Q(10).round(score * path.p1))) +
-                path.amp2 * int.cos(Q(10).mod(Q(10).round(score * path.p2)));
-            const offset = Q(20).round(wave * 25);
-            const center = @divTrunc(self.session.size.i().x, 2) + offset;
-            const jitter = prng_r.range(-1, 1);
-            const gap_pos = center - @divTrunc(gap_width - @as(i32, @intCast(skew)), 2) + jitter;
-            break :blk int.clamp(
-                gap_pos,
-                game.gap_pos_min,
-                game.gapPosMax(self.session.size, @intCast(gap_width)),
-            );
-        };
-        const road_left: u32 = @as(u32, @intCast(gap_pos)) + skew;
-        const road_right: u32 = @as(u32, @intCast(gap_pos)) + @as(u32, @intCast(gap_width)) - skew;
-        log.debug(
-            "road left: {}, road right: {}, gap_pos: {}, gap_width: {}",
-            .{ road_left, road_right, gap_pos, gap_width },
-        );
-        return .{ .road_left = road_left, .road_right = road_right };
-    }
-
-    fn rngIdxForScore(score: u32) u32 {
-        return score % (prng.Batch.len - 1);
-    }
-
-    fn symMap(self: *const @This()) []u8 {
-        return self.sym_map[0..@intCast(self.session.size.area())];
-    }
-
-    fn roadLeft(self: *const @This()) []u32 {
-        return self.road_left[0..self.session.size.y];
-    }
-
-    fn roadRight(self: *const @This()) []u32 {
-        return self.road_right[0..self.session.size.y];
-    }
-
-    fn rowRng(self: *const @This()) []prng.Batch.U {
-        return self.row_rng[0..self.session.size.x];
-    }
-};

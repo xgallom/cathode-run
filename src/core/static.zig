@@ -24,8 +24,8 @@ pub const asset = struct {
 };
 
 pub const gap_width = struct {
-    pub const max = 64;
-    pub const min = if (options.wide_gap orelse options.debug) 32 else 18;
+    pub const max = [_]i32{ 64, 64, 32 };
+    pub const min = [_]i32{ 32, 18, 12 };
 };
 
 pub const score = struct {
@@ -50,6 +50,12 @@ pub const delay = struct {
     pub const start = unit.s(1).v;
     pub const step = unit.us(16667).v;
 
+    pub const menu_in = unit.ms(1000).v;
+    pub const menu_out = unit.ms(1000).v;
+
+    pub const settings_in = unit.ms(1000).v;
+    pub const settings_out = unit.ms(1000).v;
+
     pub const intro = unit.s(10).v;
     pub const intro_in = unit.ms(1000).v;
     pub const intro_out = unit.ms(1000).v;
@@ -57,10 +63,16 @@ pub const delay = struct {
     pub const intro_out_sound = unit.ms(750).v;
     pub const intro_out_sound_0 = intro - intro_out_sound;
 
-    pub const running_slow_max = unit.us(66668).v;
-    pub const running_slow_min = unit.us(66668).v;
-    pub const running_max = unit.us(66668).v;
-    pub const running_min = unit.us(33334).v;
+    pub const running_max = [_]u64{
+        unit.us(66668).v,
+        unit.us(66668).v,
+        unit.us(33334).v,
+    };
+    pub const running_min = [_]u64{
+        unit.us(66668).v,
+        unit.us(33334).v,
+        unit.us(16667).v,
+    };
 
     pub const score = unit.s(10).v;
     pub const score_in = unit.ms(1000).v;
@@ -154,6 +166,12 @@ pub const ansi = struct {
 pub const clr = struct {
     const C = game.Color;
     pub const default: game.CellAttr = .{ .fg = C.many(&.{ .red, .green, .blue }) };
+    pub const menu_bg: game.CellAttr = .{ .fg = C.many(&.{ .red, .green, .blue }) };
+    pub const menu_title: game.CellAttr = .{ .fg = C.many(&.{ .red, .green, .blue, .bold }) };
+    pub const menu_item: game.CellAttr = .{ .fg = C.many(&.{ .red, .bold }) };
+    pub const menu_active: game.CellAttr = .{ .fg = C.many(&.{ .red, .green, .bold }) };
+    pub const menu_item_hl: game.CellAttr = .{ .fg = C.many(&.{ .red, .blue, .bold }) };
+    pub const menu_active_hl: game.CellAttr = .{ .fg = C.many(&.{ .red, .green, .blue, .bold }) };
     pub const intro: game.CellAttr = .{ .fg = C.many(&.{ .red, .bold }) };
     pub const walls = [_]game.CellAttr{
         .{ .bg = C.one(.red), .fg = C.many(&.{ .red, .bold }) },
@@ -198,6 +216,25 @@ pub const clr = struct {
         .{ .bg = C.many(&.{ .red, .green, .blue, .bold }), .fg = C.none },
     };
     pub const msgs_scores_quit: game.CellAttr = .{ .fg = C.many(&.{ .red, .bold }) };
+
+    pub const rgb_f32: [16][3]f32 = .{
+        .{ 0, 0, 0 },
+        .{ 170.0 / 255.0, 0, 0 },
+        .{ 0, 170.0 / 255.0, 0 },
+        .{ 170.0 / 255.0, 85.0 / 255.0, 0 },
+        .{ 0, 0, 170.0 / 255.0 },
+        .{ 170.0 / 255.0, 0, 170.0 / 255.0 },
+        .{ 0, 170.0 / 255.0, 170.0 / 255.0 },
+        .{ 170.0 / 255.0, 170.0 / 255.0, 170.0 / 255.0 },
+        .{ 85.0 / 255.0, 85.0 / 255.0, 85.0 / 255.0 },
+        .{ 255.0 / 255.0, 85.0 / 255.0, 85.0 / 255.0 },
+        .{ 85.0 / 255.0, 255.0 / 255.0, 85.0 / 255.0 },
+        .{ 255.0 / 255.0, 255.0 / 255.0, 85.0 / 255.0 },
+        .{ 85.0 / 255.0, 85.0 / 255.0, 255.0 / 255.0 },
+        .{ 255.0 / 255.0, 85.0 / 255.0, 255.0 / 255.0 },
+        .{ 85.0 / 255.0, 255.0 / 255.0, 255.0 / 255.0 },
+        .{ 255.0 / 255.0, 255.0 / 255.0, 255.0 / 255.0 },
+    };
 };
 
 pub const sym = struct {
@@ -206,6 +243,8 @@ pub const sym = struct {
     pub const player = 0xE9;
     pub const void_stone = 0xF8;
     pub const pcl_engine = 0xFA;
+    pub const empty_bar = 0xB0;
+    pub const full_bar = 0xDB;
     pub const blocks = [_]u8{
         gnd,
         0xB0,
@@ -256,13 +295,41 @@ pub const sym = struct {
 pub const txt = struct {
     pub const start = "Warming up energy coils...";
     pub const intro = "You are fleeing the fallen city...";
+
+    pub const menu_title = "CATHODE RUN";
+    pub const menu_options = [_][]const u8{
+        "PLAY",
+        "SETTINGS",
+        "QUIT",
+    };
+    pub const menu_bg = @embedFile("menu_bg.txt");
+
+    pub const settings_title = "SETTINGS";
+    pub const settings_options = [_][]const u8{
+        "GAP WIDTH    ",
+        "GAME SPEED   ",
+        "SOUND VOLUME ",
+        "ENGINE VOLUME",
+        "MUSIC VOLUME ",
+    };
+    pub const settings_widths = [_][]const u8{
+        "WIDE",
+        "NORMAL",
+        "NARROW",
+    };
+    pub const settings_game_speeds = [_][]const u8{
+        "SLOW",
+        "NORMAL",
+    };
+
     pub const tutor = tjoin(&.{
-        t2("W", "K", "Up"),    ts,
-        t2("S", "J", "Down"),  ts,
-        t2("A", "H", "Left"),  ts,
-        t2("D", "L", "Right"), ts,
+        t3("W", "K", "\x18", "Up"),    ts,
+        t3("S", "J", "\x19", "Down"),  ts,
+        t3("A", "H", "\x1b", "Left"),  ts,
+        t3("D", "L", "\x1a", "Right"), ts,
         t1("Q", "quit"),
     });
+
     pub const msgs_running = [_][]const u8{
         "You hear gunshots in the distance...",
         "She was only trouble, but you knew that from the start...",
@@ -270,6 +337,7 @@ pub const txt = struct {
         "You know in your heart forgetting her is impossible.",
         "You know in your heart forgetting her is impossible.",
     };
+
     pub const msgs_score = [_][]const u8{
         "Will you keep trying? Better than dying forgotten...",
         "You keep trying. That's all that matters.",
@@ -278,6 +346,7 @@ pub const txt = struct {
         "You may yet live to see a different life, free of their ever-present hunt.",
     };
     pub const msg_quit = "With this character's death, the thread of fate is severed.";
+
     pub const score = "SYSTEM ONLINE // SCORE: ";
     pub const score_num = "0000";
     pub const scores = [_][2][]const u8{
@@ -291,8 +360,8 @@ pub const txt = struct {
     const score_lost = "SIGNAL LOST // FINAL SCORE: ";
     const ts = " / ";
 
-    fn t2(k1: []const u8, k2: []const u8, name: []const u8) []const u8 {
-        return t1(k1 ++ "|" ++ k2, name);
+    fn t3(k1: []const u8, k2: []const u8, k3: []const u8, name: []const u8) []const u8 {
+        return t1(k1 ++ "|" ++ k2 ++ "|" ++ k3, name);
     }
 
     fn t1(k: []const u8, name: []const u8) []const u8 {
@@ -337,11 +406,12 @@ pub const txt = struct {
 };
 
 pub const key = struct {
-    pub const up = [_]u8{ 'w', 'k', 'W', 'K' };
-    pub const right = [_]u8{ 'd', 'l', 'D', 'L' };
-    pub const down = [_]u8{ 's', 'j', 'S', 'J' };
-    pub const left = [_]u8{ 'a', 'h', 'A', 'H' };
-    pub const quit = [_]u8{ 'q', 'Q' };
-    pub const dbg_prev_lvl = [_]u8{'['};
-    pub const db_next_lvl = [_]u8{']'};
+    pub const up = [_]u32{ 'w', 'k', 'W', 'K', 0x40000052 };
+    pub const right = [_]u32{ 'd', 'l', 'D', 'L', 0x4000004f };
+    pub const down = [_]u32{ 's', 'j', 'S', 'J', 0x40000051 };
+    pub const left = [_]u32{ 'a', 'h', 'A', 'H', 0x40000050 };
+    pub const accept = [_]u32{ ' ', '\r' };
+    pub const quit = [_]u32{ 'q', 'Q' };
+    pub const dbg_prev_lvl = [_]u32{'['};
+    pub const db_next_lvl = [_]u32{']'};
 };
