@@ -100,6 +100,7 @@ const State = struct {
             self.frame.clear();
 
             const to = try core.update(&self.game);
+            state.game.input_buf[0] = .none;
             state.input_idx = 0;
 
             try core.render(&self.game, &self.frame);
@@ -246,6 +247,7 @@ fn load(self: *const Zengine) !bool {
     allocators.scratchRelease();
 
     state = try .init(.{ .x = game_render.cells[0], .y = game_render.cells[1] });
+    try readSettings(&state.game.ui.settings);
     try loadSound(self, try state.assets.assetPath(.samples, static.asset.sample.activate), .oneshot);
     try loadSound(self, try state.assets.assetPath(.samples, static.asset.sample.explosion), .oneshot);
     try loadSound(self, try state.assets.assetPath(.samples, static.asset.sample.woosh), .oneshot);
@@ -348,6 +350,7 @@ fn input(self: *const Zengine) !bool {
                     c.SDLK_F10 => try reset(),
                     c.SDLK_ESCAPE => return false,
                     else => {
+                        assert(state.input_idx < state.game.input_buf.len);
                         state.game.input_buf[state.input_idx] = .down(@intCast(event.sdl.key.key));
                         state.input_idx += 1;
                     },
@@ -355,6 +358,7 @@ fn input(self: *const Zengine) !bool {
             },
             .key_up => switch (event.sdl.key.key) {
                 else => {
+                    assert(state.input_idx < state.game.input_buf.len);
                     state.game.input_buf[state.input_idx] = .up(@intCast(event.sdl.key.key));
                     state.input_idx += 1;
                 },
@@ -369,6 +373,7 @@ fn input(self: *const Zengine) !bool {
 fn update(self: *const Zengine) !bool {
     if (!try state.tick()) return false;
     if (state.game.session.state == .settings) {
+        try updateSettings(&state.game.ui.settings);
         {
             const gain: f32 = @as(f32, @floatFromInt(state.game.ui.settings[2])) / 10.0;
             try updateGain(self.audio.tracks.get(
@@ -456,6 +461,53 @@ fn update(self: *const Zengine) !bool {
 
 fn updateGain(track: zengine.audio.Track, gain: f32) !void {
     if (track.gain() != gain) try track.setGain(gain);
+}
+
+fn updateSettings(settings: []const u32) !void {
+    const path_c = zengine.c.SDL_GetPrefPath("xgallom", "cathode-run");
+    if (path_c == null) {
+        log.err("failed obtaining save path", .{});
+        return error.PathFailed;
+    }
+    defer zengine.c.SDL_free(path_c);
+    const path = try std.fs.path.join(
+        allocators.scratch(),
+        &.{ std.mem.span(path_c), "settings.bin" },
+    );
+    defer allocators.scratch().free(path);
+    const file = try std.fs.createFileAbsolute(path, .{ .lock = .exclusive });
+    defer file.close();
+    var out_buf: [256]u8 = undefined;
+    var writer = file.writer(&out_buf);
+    const w = &writer.interface;
+    try w.writeInt(usize, settings.len, .little);
+    for (settings) |setting| try w.writeInt(u32, setting, .little);
+    try w.flush();
+}
+
+fn readSettings(settings: []u32) !void {
+    const path_c = zengine.c.SDL_GetPrefPath("xgallom", "cathode-run");
+    if (path_c == null) {
+        log.err("failed obtaining save path", .{});
+        return error.PathFailed;
+    }
+    defer zengine.c.SDL_free(path_c);
+    const path = try std.fs.path.join(
+        allocators.scratch(),
+        &.{ std.mem.span(path_c), "settings.bin" },
+    );
+    defer allocators.scratch().free(path);
+    const file = std.fs.openFileAbsolute(path, .{ .lock = .shared }) catch |err| switch (err) {
+        error.FileNotFound => return,
+        else => return err,
+    };
+    defer file.close();
+    var out_buf: [256]u8 = undefined;
+    var reader = file.reader(&out_buf);
+    const r = &reader.interface;
+    const len = r.takeInt(usize, .little) catch return;
+    if (len != settings.len) return;
+    for (settings) |*setting| setting.* = try r.takeInt(u32, .little);
 }
 
 fn render(self: *const Zengine) !void {

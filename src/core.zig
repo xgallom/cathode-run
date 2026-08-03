@@ -45,7 +45,7 @@ pub const cathode_run_options: Options = .{
 pub const std_options: std.Options = .{
     .log_scope_levels = &.{
         .{ .scope = .audio, .level = .info },
-        .{ .scope = .core, .level = .debug },
+        .{ .scope = .core, .level = .info },
         .{ .scope = .cp437, .level = .info },
         .{ .scope = .game, .level = .info },
         .{ .scope = .int, .level = .info },
@@ -200,10 +200,6 @@ fn consumeInputs(self: *GameState) !game.SessionState {
 }
 
 fn updateMenu(self: *GameState) !game.SessionState {
-    if (self.ui.delay <= static.delay.menu_in) {
-        _ = try consumeInputs(self);
-        return .menu;
-    }
     if (self.ui.start_out_delay != 0) {
         const out_delay = self.ui.start_out_delay;
         if (self.ui.delay >= out_delay + static.delay.menu_out) switch (self.ui.active_idx) {
@@ -215,7 +211,6 @@ fn updateMenu(self: *GameState) !game.SessionState {
             2 => return .end,
             else => unreachable,
         };
-        _ = try consumeInputs(self);
         return .menu;
     }
 
@@ -231,7 +226,7 @@ fn updateMenu(self: *GameState) !game.SessionState {
             if (self.ui.active_idx > 0) self.ui.active_idx -= 1;
         } else if (in.isKey(&static.key.accept)) {
             try self.sample_queue.appendBounded(.{ .start = static.asset.sample.activate });
-            self.ui.start_out_delay = self.ui.delay;
+            self.ui.start_out_delay = @max(self.ui.delay, static.delay.menu_in);
         },
         .query => {},
     };
@@ -240,17 +235,12 @@ fn updateMenu(self: *GameState) !game.SessionState {
 }
 
 fn updateSettings(self: *GameState) !game.SessionState {
-    if (self.ui.delay <= static.delay.settings_in) {
-        _ = try consumeInputs(self);
-        return .settings;
-    }
     if (self.ui.start_out_delay != 0) {
         const out_delay = self.ui.start_out_delay;
         if (self.ui.delay >= out_delay + static.delay.settings_out) {
             self.ui.active_idx = 1;
             return .menu;
         }
-        _ = try consumeInputs(self);
         return .settings;
     }
 
@@ -279,7 +269,7 @@ fn updateSettings(self: *GameState) !game.SessionState {
             if (value.* < max) value.* += 1;
         } else if (in.isKey(&static.key.accept)) {
             try self.sample_queue.appendBounded(.{ .start = static.asset.sample.activate });
-            self.ui.start_out_delay = self.ui.delay;
+            self.ui.start_out_delay = @max(self.ui.delay, static.delay.settings_in);
         },
         .query => {},
     };
@@ -373,7 +363,13 @@ fn updateRunning(self: *GameState) !game.SessionState {
             return .quit;
         } else if (in.isKey(&static.key.dbg_prev_lvl)) {
             if (comptime allow_level_skip) {
-                score = if (static.score.level(score) > 1) static.score.level_1 else 1;
+                const level = static.score.level(score);
+                score = if (level > 2)
+                    static.score.level_2
+                else if (level > 1)
+                    static.score.level_1
+                else
+                    1;
                 self.session.score = score;
             }
         } else if (in.isKey(&static.key.db_next_lvl)) {
