@@ -58,6 +58,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
+      - name: Checkout Zengine
+        uses: actions/checkout@v7
+        with:
+          repository: 'xgallom/zengine'
+          path: '../zengine'
+
       - name: Select XCode
         if: runner.os == 'macOS'
         uses: maxim-lobanov/setup-xcode@v1

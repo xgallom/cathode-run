@@ -4,11 +4,7 @@
     .fingerprint = 0xb1c5ec178b2bcc7a,
     .minimum_zig_version = "0.15.2",
     .dependencies = .{
-        // .zengine = .{ .path = "../zengine" },
-        .zengine = .{
-            .url = "git+https://github.com/xgallom/zengine#98040b9fe00df0e5fed2506b403edd7855abc82c",
-            .hash = "zengine-0.1.0-i3_GdCPUDABdjOTWaUp_kDW7D7HlsmoY4o_DwylVoaCO",
-        },
+        .zengine = .{ .path = "../zengine" },
     },
     .paths = .{
         "build.zig",
