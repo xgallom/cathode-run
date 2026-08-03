@@ -33,7 +33,7 @@ pub const Options = struct {
     music_queue_length: usize = 4,
     music_fade_in_ms: u64 = 250,
     movement_fade_in_ms: u64 = 67,
-    movement_fade_out_ms: u64 = 150,
+    movement_fade_out_ms: u64 = 16,
 };
 
 pub const cathode_run_options: Options = .{
@@ -141,7 +141,7 @@ pub fn transfer(self: *GameState, to: game.SessionState) !game.SessionState {
 
 pub fn update(self: *GameState) !game.SessionState {
     switch (self.session.state) {
-        .start => return .menu,
+        .start => return if (self.ui.delay >= static.delay.start) .menu else .start,
         .menu => return try updateMenu(self),
         .settings => return try updateSettings(self),
         .init => return try consumeInputs(self),
@@ -177,7 +177,7 @@ pub fn sleep(self: *GameState) u64 {
             static.score.running_delay_end,
             self.settings.delay_running_max,
             self.settings.delay_running_min,
-        ),
+        ) * static.delay.step,
         else => static.delay.step,
     };
     if (self.ui.update_delay) self.ui.delay += delay;
@@ -222,7 +222,8 @@ fn updateMenu(self: *GameState) !game.SessionState {
     for (self.input_buf) |in| switch (in.event) {
         .none => break,
         .err => return error.InputFailed,
-        .down => if (in.isKey(&static.key.down)) {
+        .down => {},
+        .up => if (in.isKey(&static.key.down)) {
             try self.sample_queue.appendBounded(.{ .start = static.asset.sample.activate });
             if (self.ui.active_idx < static.txt.menu_options.len - 1) self.ui.active_idx += 1;
         } else if (in.isKey(&static.key.up)) {
@@ -232,7 +233,6 @@ fn updateMenu(self: *GameState) !game.SessionState {
             try self.sample_queue.appendBounded(.{ .start = static.asset.sample.activate });
             self.ui.start_out_delay = self.ui.delay;
         },
-        .up => {},
         .query => {},
     };
 
@@ -257,7 +257,8 @@ fn updateSettings(self: *GameState) !game.SessionState {
     for (self.input_buf) |in| switch (in.event) {
         .none => break,
         .err => return error.InputFailed,
-        .down => if (in.isKey(&static.key.down)) {
+        .down => {},
+        .up => if (in.isKey(&static.key.down)) {
             try self.sample_queue.appendBounded(.{ .start = static.asset.sample.activate });
             if (self.ui.active_idx < static.txt.settings_options.len - 1) self.ui.active_idx += 1;
         } else if (in.isKey(&static.key.up)) {
@@ -271,8 +272,7 @@ fn updateSettings(self: *GameState) !game.SessionState {
             try self.sample_queue.appendBounded(.{ .start = static.asset.sample.activate });
             const value = &self.ui.settings[self.ui.active_idx];
             const max: u32 = switch (self.ui.active_idx) {
-                0 => 2,
-                1 => 1,
+                0, 1 => 2,
                 2, 3, 4 => 10,
                 else => unreachable,
             };
@@ -281,7 +281,6 @@ fn updateSettings(self: *GameState) !game.SessionState {
             try self.sample_queue.appendBounded(.{ .start = static.asset.sample.activate });
             self.ui.start_out_delay = self.ui.delay;
         },
-        .up => {},
         .query => {},
     };
 
@@ -452,7 +451,6 @@ fn updateRunning(self: *GameState) !game.SessionState {
             int.flag.set(&self.ui.state, UIState.one(.sound_engine_y_on));
         } else if (has_y <= 0 and int.flag.has(self.ui.state, UIState.one(.sound_engine_y_on))) {
             try self.sample_queue.appendBounded(.{ .stop = static.asset.sample.engine_y });
-            try self.sample_queue.appendBounded(.{ .start = static.asset.sample.engine_idle });
             int.flag.clr(&self.ui.state, UIState.one(.sound_engine_y_on));
         }
 
@@ -777,14 +775,23 @@ fn drawSetting(self: *GameState, frame: *const Frame, n: usize, x: u32) !void {
             frame.write(
                 stxt.settings_game_speeds[0],
                 if (value == 0) attr_active else attr_item,
-                int.idx2D(msg_y + n, x0 + 3, size.x),
+                int.idx2D(msg_y + n, x0, size.x),
             );
             frame.write(
                 stxt.settings_game_speeds[1],
                 if (value == 1) attr_active else attr_item,
                 int.idx2D(
                     msg_y + n,
-                    x0 + stxt.settings_game_speeds[0].len + 4,
+                    x0 + stxt.settings_game_speeds[0].len + 1,
+                    size.x,
+                ),
+            );
+            frame.write(
+                stxt.settings_game_speeds[2],
+                if (value == 2) attr_active else attr_item,
+                int.idx2D(
+                    msg_y + n,
+                    x0 + stxt.settings_game_speeds[0].len + stxt.settings_game_speeds[1].len + 2,
                     size.x,
                 ),
             );

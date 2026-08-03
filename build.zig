@@ -8,7 +8,6 @@ pub fn build(b: *std.Build) !void {
     const zmod = zengine.module("zengine");
     const z = @import("zengine");
     const options = z.getOptions(b);
-    std.log.info("zengine path: {s}", .{zengine.builder.pathFromRoot("")});
 
     const install_assets = try z.addInstallAssets(b);
 

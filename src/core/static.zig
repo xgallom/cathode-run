@@ -63,16 +63,8 @@ pub const delay = struct {
     pub const intro_out_sound = unit.ms(750).v;
     pub const intro_out_sound_0 = intro - intro_out_sound;
 
-    pub const running_max = [_]u64{
-        unit.us(66668).v,
-        unit.us(66668).v,
-        unit.us(33334).v,
-    };
-    pub const running_min = [_]u64{
-        unit.us(66668).v,
-        unit.us(33334).v,
-        unit.us(16667).v,
-    };
+    pub const running_max = [_]u64{ 4, 4, 3 };
+    pub const running_min = [_]u64{ 4, 2, 1 };
 
     pub const score = unit.s(10).v;
     pub const score_in = unit.ms(1000).v;
@@ -320,6 +312,7 @@ pub const txt = struct {
     pub const settings_game_speeds = [_][]const u8{
         "SLOW",
         "NORMAL",
+        "FAST",
     };
 
     pub const tutor = tjoin(&.{
