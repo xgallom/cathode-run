@@ -153,6 +153,10 @@ pub fn main() !void {
         .input = &input,
         .update = &update,
         .render = &render,
+    }, &.{
+        .title = "Cathode Run",
+        // .size = .{ 1920, 1080 },
+        .flags = .initMany(&.{ .high_pixel_density, .resizable, .fullscreen }),
     });
     defer engine.deinit();
 

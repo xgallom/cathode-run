@@ -7,9 +7,11 @@ Texture2D<float4> SrcBuffer : register(t0, space2);
 SamplerState SrcSampler  : register(s0, space2);
 
 // --- Terminal Parameters ---
-static const float cell_w_px = 36.0;       // Cell width in terminal
-static const float cell_h_px = 96.0;       // Cell height in terminal
-static const float pixels_per_cell = 36.0; // How many pixels per character line
+static const float cells_x = 120;       // Cell width in terminal
+static const float cells_y = 32;       // Cell height in terminal
+static const float cell_w_px = 7.5;       // Cell width in terminal
+static const float cell_h_px = 16.0;       // Cell height in terminal
+static const float pixels_per_cell = 7.5; // How many pixels per character line
 static const float scans_per_cell = 16.0;  // How many scanlines per character
 
 // --- Configurable Parameters ---
@@ -27,8 +29,8 @@ static const float bloom_amt = 1.00;      // How intense the glow is
 static const float bloom_pwr = 2.00;      // How non-linear is the blur
 static const float bloom_radius = 1.5;    // How far the light scatters (in pixels)
 static const float scanlines = 512.0;     // Number of horizontal scanlines
-static const float scan_depth = 0.45;     // How dark the gaps get (0.0 to 1.0)
-static const float sigma = 0.45;          // Beam focus thickness
+static const float scan_depth = 1.00;     // How dark the gaps get (0.0 to 1.0)
+static const float sigma = 0.35;          // Beam focus thickness
 static const float noise_amt = 0.0250;    // Static grain intensity
 static const float vign_amt = 1.00;       // Vignette strength
 static const float refl = 0.020;          // Glass glare intensity
@@ -62,12 +64,12 @@ static const float brightness = 1.00;     // Output brightness
 #define CHROMATIC_ABERRATION_ENABLED
 
 // Enable horizontal scanlines
-// #define SCANLINES_ENABLED
+#define SCANLINES_ENABLED
 
 // Enable automatic scanlines count
 // Requires cell_w_px, cell_h_px and scans_per_cell
 // Otherwise requies scanlines
-// #define AUTOMATIC_SCANLINES
+#define AUTOMATIC_SCANLINES
 
 // Enable bloom
 #define BLOOM_ENABLED
@@ -183,7 +185,14 @@ float4 main(float2 fragCoord : TEX_COORD) : SV_Target
     uv.x *= cell_w_px / pixels_per_cell;
     uv.x += 0.5;
     float2 cell_px = float2(pixels_per_cell, cell_h_px);
-    float2 cells = floor(iResolution.xy / cell_px);
+    float2 cells = float2(cells_x, cells_y);
+    float2 cell_size = iResolution / cells;
+    float2 cell_comp = float2(
+        cell_size.y / cell_px.y * cell_px.x,
+        cell_size.x / cell_px.x * cell_px.y);
+    cell_px = float2(cell_size.x, cell_comp.y);
+    if (cell_size.x > cell_comp.x) cell_px = float2(cell_comp.x, cell_size.y);
+
     float2 cells_px = cells * cell_px;
     float2 cells_to_fb = cells_px / iResolution.xy;
     float2 pad_uv = (iResolution.xy - cells_px) / (2.0 * iResolution.xy);

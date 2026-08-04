@@ -136,12 +136,12 @@ pub fn Q(comptime N: comptime_int) type {
             return @bitCast(z(val));
         }
 
-        // Unsigned is not zero mask
+        // Unsigned is true mask
         pub fn tu(cond: bool) U {
             return @bitCast(t(cond));
         }
 
-        // Unsigned is zero mask
+        // Unsigned is false mask
         pub fn ntu(cond: bool) U {
             return @bitCast(nt(cond));
         }

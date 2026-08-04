@@ -53,6 +53,7 @@ pub const InputResult = struct {
         } else false;
     }
 };
+
 pub const Frame = struct {
     syms: []u8,
     attrs: []game.CellAttr,
@@ -163,7 +164,7 @@ pub const UIState = enum {
 };
 
 pub const UISession = struct {
-    settings: [5]u32 = .{ 1, 1, 7, 5, 10 },
+    settings: [5]u32 = .{ 1, 1, 6, 5, 7 },
     state: UIState.Flags = UIState.none,
     input: game.Dir.Flags = game.Dir.none,
     delay: u64 = 0,
