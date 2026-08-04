@@ -104,6 +104,10 @@ pub fn transfer(self: *GameState, to: game.SessionState) !game.SessionState {
             return .intro;
         },
         .running => {
+            if (self.session.state == .paused) {
+                self.session.state = .running;
+                return .running;
+            }
             try self.sample_queue.appendBounded(.{ .start = static.asset.sample.engine_idle });
             int.flag.set(&self.ui.state, UIState.one(.sound_engine_idle_on));
             try self.music_queue.appendBounded(static.asset.music.levels[0]);
@@ -112,7 +116,10 @@ pub fn transfer(self: *GameState, to: game.SessionState) !game.SessionState {
             self.session.state = .running;
             return .running;
         },
-        .paused => unreachable,
+        .paused => {
+            self.session.state = .paused;
+            return .paused;
+        },
         .died, .quit => |s| {
             if (int.flag.has(self.ui.state, UIState.one(.key_down))) {
                 int.flag.set(&self.ui.state, UIState.one(.waiting_release));
@@ -147,13 +154,15 @@ pub fn update(self: *GameState) !game.SessionState {
         .init => return try consumeInputs(self),
         .intro => return try updateIntro(self),
         .running => return try updateRunning(self),
-        .paused => unreachable,
+        .paused => return try updatePaused(self),
         .died, .quit => return try updateScore(self),
         .end => return .end,
     }
 }
 
 pub fn render(self: *GameState, frame: *const Frame) !void {
+    if (self.session.state == .paused) return;
+    frame.clear();
     switch (self.session.state) {
         .start => frame.write(static.txt.start, static.clr.default, 0),
         .menu => try drawMenu(self, frame),
@@ -180,7 +189,7 @@ pub fn sleep(self: *GameState) u64 {
         ) * static.delay.step,
         else => static.delay.step,
     };
-    if (self.ui.update_delay) self.ui.delay += delay;
+    if (self.session.state != .paused and self.ui.update_delay) self.ui.delay += delay;
     return unit.us(delay).toNs();
 }
 
@@ -343,7 +352,12 @@ fn updateRunning(self: *GameState) !game.SessionState {
             &self.ui.input,
             game.Dir.one(.left),
         ),
-        .up => if (in.isKey(&static.key.up)) int.flag.clr(
+        .up => if (in.isKey(&static.key.accept)) {
+            self.session.score -= 1;
+            self.ui.input = game.Dir.none;
+            try self.sample_queue.appendBounded(.{ .start = static.asset.sample.activate });
+            return .paused;
+        } else if (in.isKey(&static.key.up)) int.flag.clr(
             &self.ui.input,
             game.Dir.one(.up),
         ) else if (in.isKey(&static.key.right)) int.flag.clr(
@@ -489,6 +503,21 @@ fn updateRunning(self: *GameState) !game.SessionState {
         }
     }
     return .running;
+}
+
+fn updatePaused(self: *GameState) !game.SessionState {
+    for (self.input_buf) |in| switch (in.event) {
+        .none => break,
+        .err => return error.InputFailed,
+        .down => int.flag.set(&self.ui.state, UIState.one(.key_down)),
+        .up => if (in.isKey(&static.key.accept)) {
+            try self.sample_queue.appendBounded(.{ .start = static.asset.sample.activate });
+            return .running;
+        },
+        .query => {},
+    };
+
+    return .paused;
 }
 
 fn updateScore(self: *GameState) !game.SessionState {

@@ -97,8 +97,6 @@ const State = struct {
     pub fn tick(self: *@This()) !bool {
         self.run_counter.add(global.sinceLastFrameNano());
         while (self.run_counter.run()) {
-            self.frame.clear();
-
             const to = try core.update(&self.game);
             state.game.input_buf[0] = .none;
             state.input_idx = 0;

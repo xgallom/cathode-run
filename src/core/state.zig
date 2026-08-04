@@ -268,9 +268,9 @@ pub const GameState = struct {
     }
 
     pub fn reset(self: *@This()) void {
-        // periods in Q20 (IA angle + Q10 period)
+        // periods in Q20 (IA angle * Q10 period)
         // amplitudes in Q6
-        // wave in Q20 (Q14 sin + Q6 amplitude)
+        // wave in Q20 (Q14 sin * Q6 amplitude)
         // 0.6 * sin(0.07 * t) + 0.4 * cos(0.03 * t)
         // target values for seed 0: 11682 5007 38 26
         self.settings.gap_width_max = static.gap_width.max[self.ui.settings[0]];
@@ -337,8 +337,7 @@ pub const GameState = struct {
         const rng_idx = rngIdxForScore(score);
 
         const bounds = self.generateRoadBounds(score, rng_idx);
-        const next_bounds = self.generateRoadBounds(score + 1, rng_idx + 1);
-        _ = next_bounds;
+        // const next_bounds = self.generateRoadBounds(score + 1, rng_idx + 1);
         const road_left = bounds.road_left;
         const road_right = bounds.road_right;
         self.road_left[0] = road_left;
