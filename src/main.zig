@@ -135,7 +135,7 @@ fn logFn(
 }
 
 pub fn main() !void {
-    allocators.init(1_000_000_000);
+    allocators.init(1 << 30);
     defer allocators.deinit();
 
     log_window = try .init(allocators.gpa());
@@ -148,6 +148,7 @@ pub fn main() !void {
         // .register = &register,
         .load = &load,
         .unload = &unload,
+        .resize = &resize,
         .input = &input,
         .update = &update,
         .render = &render,
@@ -326,15 +327,21 @@ fn unload(self: *const Zengine) !void {
 }
 
 fn input(self: *const Zengine) !bool {
-    while (Event.poll()) |event| {
+    while (Event.poll(self.engine)) |event| {
         if (self.ui.show_ui and c.ImGui_ImplSDL3_ProcessEvent(&event.sdl)) {
             switch (event.type) {
                 .quit => return false,
                 .key_down => {
                     if (event.sdl.key.repeat) break;
                     switch (event.sdl.key.key) {
-                        c.SDLK_F1 => self.ui.show_ui = !self.ui.show_ui,
-                        c.SDLK_ESCAPE => self.ui.show_ui = !self.ui.show_ui,
+                        c.SDLK_F1 => {
+                            self.ui.show_ui = !self.ui.show_ui;
+                            try self.engine.setCursorVisible(false);
+                        },
+                        c.SDLK_ESCAPE => {
+                            self.ui.show_ui = !self.ui.show_ui;
+                            try self.engine.setCursorVisible(false);
+                        },
                         else => {},
                     }
                 },
@@ -348,7 +355,10 @@ fn input(self: *const Zengine) !bool {
             .key_down => {
                 if (event.sdl.key.repeat) break;
                 switch (event.sdl.key.key) {
-                    c.SDLK_F1 => self.ui.show_ui = !self.ui.show_ui,
+                    c.SDLK_F1 => {
+                        try self.engine.setCursorVisible(true);
+                        self.ui.show_ui = !self.ui.show_ui;
+                    },
                     c.SDLK_F10 => try reset(),
                     c.SDLK_ESCAPE => return false,
                     else => {
@@ -372,6 +382,14 @@ fn input(self: *const Zengine) !bool {
     return true;
 }
 
+fn resize(self: *const Zengine) !bool {
+    if (gfx_fence.isValid()) {
+        try self.renderer.gpu_device.wait(.any, &.{gfx_fence});
+        self.renderer.gpu_device.release(&gfx_fence);
+    }
+    try self.renderer.resizeTextures();
+    return true;
+}
 fn update(self: *const Zengine) !bool {
     if (!try state.tick()) return false;
     if (state.game.session.state == .settings) {

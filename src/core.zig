@@ -315,9 +315,7 @@ fn updateIntro(self: *GameState) !game.SessionState {
         .query => {},
     };
 
-    if (self.ui.delay > static.delay.intro_in and
-        int.flag.has(self.ui.state, UIState.one(.skip)))
-    {
+    if (self.ui.delay > static.delay.intro_in and int.flag.has(self.ui.state, UIState.one(.skip))) {
         if (self.ui.delay < static.delay.intro_out_0) self.ui.delay = static.delay.intro_out_0;
         int.flag.clr(&self.ui.state, UIState.one(.skip));
     }
@@ -548,7 +546,7 @@ fn updateScore(self: *GameState) !game.SessionState {
         .query => {},
     };
 
-    if (int.flag.has(self.ui.state, UIState.one(.skip))) {
+    if (self.ui.delay > static.delay.score_in and int.flag.has(self.ui.state, UIState.one(.skip))) {
         if (self.ui.delay < static.delay.score_out_0) self.ui.delay = static.delay.score_out_0;
         int.flag.clr(&self.ui.state, UIState.one(.skip));
     }

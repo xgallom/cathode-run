@@ -175,7 +175,12 @@ pub fn renderScreen(
     var dst_buf = screen_buffer;
     for (passes, 0..) |tex_pass, n| {
         std.mem.swap(gfx.GPUTexture, &src_buf, &dst_buf);
-        try tex_pass.render(self, command_buffer, src_buf, if (n == passes.len - 1) swapchain else dst_buf);
+        try tex_pass.render(
+            self,
+            command_buffer,
+            src_buf,
+            if (n == passes.len - 1) swapchain else dst_buf,
+        );
     }
 
     // {
