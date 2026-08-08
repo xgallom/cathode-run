@@ -47,6 +47,7 @@ pub const score = struct {
 };
 
 pub const delay = struct {
+    pub const start_frames = 17;
     pub const start = unit.s(1).v;
     pub const step = unit.us(16667).v;
 

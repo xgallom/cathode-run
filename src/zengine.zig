@@ -75,7 +75,7 @@ const State = struct {
     assets: Assets,
     game: core.state.GameState,
     frame: core.state.Frame,
-    run_counter: RunCounter = .init(static.delay.step),
+    run_counter: RunCounter = .init(1),
     rnd: std.Random.DefaultPrng,
     active_music: ?[]const u8 = null,
     input_idx: usize = 0,
@@ -95,7 +95,7 @@ const State = struct {
     }
 
     pub fn tick(self: *@This()) !bool {
-        self.run_counter.add(global.sinceLastFrameNano());
+        self.run_counter.add(1);
         while (self.run_counter.run()) {
             const to = try core.update(&self.game);
             state.game.input_buf[0] = .none;

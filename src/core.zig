@@ -75,6 +75,7 @@ pub fn transfer(self: *GameState, to: game.SessionState) !game.SessionState {
                 try self.music_queue.appendBounded(static.asset.music.menu);
                 int.flag.set(&self.ui.state, UIState.one(.not_first_start));
             }
+            int.flag.clr(&self.ui.state, UIState.one(.quit));
             self.ui.delay = 0;
             self.ui.start_out_delay = 0;
             self.session.state = .menu;
@@ -177,8 +178,8 @@ pub fn render(self: *GameState, frame: *const Frame) !void {
 }
 
 pub fn sleep(self: *GameState) u64 {
-    const delay = switch (self.session.state) {
-        .start => static.delay.start,
+    const frames = switch (self.session.state) {
+        .start => static.delay.start_frames,
         .running => int.map(
             u32,
             self.session.score,
@@ -186,11 +187,13 @@ pub fn sleep(self: *GameState) u64 {
             static.score.running_delay_end,
             self.settings.delay_running_max,
             self.settings.delay_running_min,
-        ) * static.delay.step,
-        else => static.delay.step,
+        ),
+        else => 1,
     };
-    if (self.session.state != .paused and self.ui.update_delay) self.ui.delay += delay;
-    return unit.us(delay).toNs();
+    if (self.session.state != .paused and self.ui.update_delay) {
+        self.ui.delay += frames * static.delay.step;
+    }
+    return frames;
 }
 
 fn consumeInputs(self: *GameState) !game.SessionState {
@@ -288,7 +291,7 @@ fn updateSettings(self: *GameState) !game.SessionState {
 
 fn updateIntro(self: *GameState) !game.SessionState {
     if (self.ui.delay >= static.delay.intro) {
-        return if (int.flag.has(self.ui.state, UIState.one(.quit))) .end else .running;
+        return if (int.flag.has(self.ui.state, UIState.one(.quit))) .menu else .running;
     }
 
     for (self.input_buf) |in| switch (in.event) {
@@ -371,7 +374,6 @@ fn updateRunning(self: *GameState) !game.SessionState {
             game.Dir.one(.left),
         ) else if (in.isKey(&static.key.quit)) {
             // TODO: Animation
-            int.flag.set(&self.ui.state, UIState.one(.quit));
             try self.sample_queue.appendBounded(.{ .start = static.asset.sample.activate });
             try self.sample_queue.appendBounded(.{ .start = static.asset.sample.woosh });
             return .quit;
@@ -530,9 +532,7 @@ fn updateScore(self: *GameState) !game.SessionState {
         .err => return error.InputFailed,
         .down => int.flag.set(&self.ui.state, UIState.one(.key_down)),
         .up => {
-            if (self.ui.delay > static.delay.score_in and
-                !int.flag.has(self.ui.state, UIState.one(.waiting_release)))
-            {
+            if (!int.flag.has(self.ui.state, UIState.one(.waiting_release))) {
                 if (in.isKey(&static.key.quit)) {
                     if (int.flag.has(self.ui.state, UIState.one(.quit))) {
                         return .end;
@@ -596,7 +596,7 @@ fn drawMenu(self: *GameState, frame: *const Frame) !void {
         const delay_out_0 = self.ui.start_out_delay;
         const t = param.ease(.s, 3, param.invLerp(
             @floatFromInt(delay_out_0),
-            @floatFromInt(delay_out_0 + sdelay.menu_out),
+            @floatFromInt(delay_out_0 + sdelay.menu_out - sdelay.step),
             fdelay,
         ));
 
@@ -700,7 +700,7 @@ fn drawSettings(self: *GameState, frame: *const Frame) !void {
         const delay_out_0 = self.ui.start_out_delay;
         const t = param.ease(.s, 3, param.invLerp(
             @floatFromInt(delay_out_0),
-            @floatFromInt(delay_out_0 + sdelay.settings_out),
+            @floatFromInt(delay_out_0 + sdelay.settings_out - sdelay.step),
             fdelay,
         ));
 
@@ -1047,7 +1047,11 @@ fn drawScore(self: *GameState, frame: *const Frame) !void {
             int.idx2D(msg_y + 1, @as(u32, @intCast(int.center(len, sizei.x))), size.x),
         );
     } else if (self.ui.delay >= sdelay.score_out_0) {
-        const t = param.ease(.s, 3, param.invLerp(sdelay.score_out_0, sdelay.score, fdelay));
+        const t = param.ease(.s, 3, param.invLerp(
+            sdelay.score_out_0,
+            sdelay.score - sdelay.step,
+            fdelay,
+        ));
 
         if (has_bg) {
             const y_max: u32 = @intFromFloat(@round(
