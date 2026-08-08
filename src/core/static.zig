@@ -51,15 +51,15 @@ pub const delay = struct {
     pub const start = unit.s(1).v;
     pub const step = unit.us(16667).v;
 
-    pub const menu_in = unit.ms(1000).v;
-    pub const menu_out = unit.ms(1000).v;
+    pub const menu_in = unit.ms(666).v;
+    pub const menu_out = unit.ms(666).v;
 
-    pub const settings_in = unit.ms(1000).v;
-    pub const settings_out = unit.ms(1000).v;
+    pub const settings_in = unit.ms(666).v;
+    pub const settings_out = unit.ms(666).v;
 
     pub const intro = unit.s(10).v;
-    pub const intro_in = unit.ms(1000).v;
-    pub const intro_out = unit.ms(1000).v;
+    pub const intro_in = unit.ms(666).v;
+    pub const intro_out = unit.ms(666).v;
     pub const intro_out_0 = intro - intro_out;
     pub const intro_out_sound = unit.ms(750).v;
     pub const intro_out_sound_0 = intro - intro_out_sound;
@@ -68,8 +68,8 @@ pub const delay = struct {
     pub const running_min = [_]u64{ 4, 2, 1 };
 
     pub const score = unit.s(10).v;
-    pub const score_in = unit.ms(1000).v;
-    pub const score_out = unit.ms(1000).v;
+    pub const score_in = unit.ms(666).v;
+    pub const score_out = unit.ms(666).v;
     pub const score_out_0 = @This().score - score_out;
 };
 
