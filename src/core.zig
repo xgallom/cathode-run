@@ -530,7 +530,9 @@ fn updateScore(self: *GameState) !game.SessionState {
         .err => return error.InputFailed,
         .down => int.flag.set(&self.ui.state, UIState.one(.key_down)),
         .up => {
-            if (!int.flag.has(self.ui.state, UIState.one(.waiting_release))) {
+            if (self.ui.delay >= static.delay.score_input and
+                !int.flag.has(self.ui.state, UIState.one(.waiting_release)))
+            {
                 if (in.isKey(&static.key.quit)) {
                     if (int.flag.has(self.ui.state, UIState.one(.quit))) {
                         return .end;

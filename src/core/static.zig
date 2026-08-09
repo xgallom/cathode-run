@@ -68,6 +68,7 @@ pub const delay = struct {
     pub const running_min = [_]u64{ 4, 2, 1 };
 
     pub const score = unit.s(10).v;
+    pub const score_input = unit.ms(235).v;
     pub const score_in = unit.ms(666).v;
     pub const score_out = unit.ms(666).v;
     pub const score_out_0 = @This().score - score_out;
