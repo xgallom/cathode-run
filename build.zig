@@ -47,6 +47,7 @@ pub fn build(b: *std.Build) !void {
         .name = "cathode-run",
         .root_module = exe_mod,
     });
+    exe.each_lib_rpath = false;
     const install_exe = b.addInstallArtifact(exe, .{});
     install_exe.step.dependOn(&install_assets.step);
     b.getInstallStep().dependOn(&install_exe.step);
@@ -82,7 +83,7 @@ pub fn build(b: *std.Build) !void {
         });
         install_exe.step.dependOn(&install_shaders_dir.step);
     }
-    {
+    const install_shaders = blk: {
         const install_shaders_dir = try z.addCompileShaders(b, .{
             .b = zengine.builder,
             .src = b.path("shaders"),
@@ -91,7 +92,19 @@ pub fn build(b: *std.Build) !void {
             .optimize = optimize,
         });
         install_exe.step.dependOn(&install_shaders_dir.step);
-    }
+        break :blk install_shaders_dir;
+    };
+
+    _ = try z.addBundleMacOSApp(b, .{
+        .app_dirname = "Cathode Run.app",
+        .exe_app_filename = "CathodeRun",
+        .install_exe = install_exe,
+        .install_libs = install_libs,
+        .install_resources = &.{
+            install_assets,
+            install_shaders,
+        },
+    });
 
     const check_step = b.step("check", "Check the app");
     check_step.dependOn(&check.step);
