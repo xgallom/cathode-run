@@ -30,6 +30,7 @@ const game_render = @import("render.zig");
 pub const cathode_run_options = core.cathode_run_options;
 
 pub const zengine_options: zengine.Options = .{
+    .app_identifier = "cathode-run",
     .has_debug_ui = false,
     .log_allocations = false,
 };
@@ -67,6 +68,7 @@ var stderr_buf: [1 << 16]u8 = undefined;
 var stderr_writer = std.fs.File.stderr().writer(&stderr_buf);
 const stderr = &stderr_writer.interface;
 
+var settings_path: []const u8 = undefined;
 var state: State = undefined;
 
 const RunCounter = time.Counter;
@@ -484,18 +486,7 @@ fn updateGain(track: zengine.audio.Track, gain: f32) !void {
 }
 
 fn updateSettings(settings: []const u32) !void {
-    const path_c = zengine.c.SDL_GetPrefPath("xgallom", "cathode-run");
-    if (path_c == null) {
-        log.err("failed obtaining save path", .{});
-        return error.PathFailed;
-    }
-    defer zengine.c.SDL_free(path_c);
-    const path = try std.fs.path.join(
-        allocators.scratch(),
-        &.{ std.mem.span(path_c), "settings.bin" },
-    );
-    defer allocators.scratch().free(path);
-    const file = try std.fs.createFileAbsolute(path, .{ .lock = .exclusive });
+    const file = try std.fs.createFileAbsolute(settings_path, .{ .lock = .exclusive });
     defer file.close();
     var out_buf: [256]u8 = undefined;
     var writer = file.writer(&out_buf);
@@ -506,18 +497,11 @@ fn updateSettings(settings: []const u32) !void {
 }
 
 fn readSettings(settings: []u32) !void {
-    const path_c = zengine.c.SDL_GetPrefPath("xgallom", "cathode-run");
-    if (path_c == null) {
-        log.err("failed obtaining save path", .{});
-        return error.PathFailed;
-    }
-    defer zengine.c.SDL_free(path_c);
-    const path = try std.fs.path.join(
-        allocators.scratch(),
-        &.{ std.mem.span(path_c), "settings.bin" },
-    );
-    defer allocators.scratch().free(path);
-    const file = std.fs.openFileAbsolute(path, .{ .lock = .shared }) catch |err| switch (err) {
+    settings_path = try global.prefPath("settings.bin");
+    const file = std.fs.openFileAbsolute(
+        settings_path,
+        .{ .lock = .shared },
+    ) catch |err| switch (err) {
         error.FileNotFound => return,
         else => return err,
     };
