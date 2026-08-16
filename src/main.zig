@@ -7,6 +7,7 @@ const Allocator = std.mem.Allocator;
 const zengine = @import("zengine");
 const Zengine = zengine.Zengine;
 const allocators = zengine.allocators;
+const c = zengine.ext;
 const ecs = zengine.ecs;
 const Event = zengine.Event;
 const gfx = zengine.gfx;
@@ -14,7 +15,6 @@ const Scene = zengine.gfx.Scene;
 const global = zengine.global;
 const math = zengine.math;
 const perf = zengine.perf;
-const c = zengine.ext.c;
 const scheduler = zengine.scheduler;
 const time = zengine.time;
 const Engine = zengine.Engine;
@@ -63,10 +63,6 @@ var gfx_fence: gfx.GPUFence = .invalid;
 var allocs_window: zengine.ui.AllocsWindow = undefined;
 var perf_window: zengine.ui.PerfWindow = undefined;
 var log_window: zengine.ui.LogWindow = .invalid;
-
-var stderr_buf: [1 << 16]u8 = undefined;
-var stderr_writer = std.fs.File.stderr().writer(&stderr_buf);
-const stderr = &stderr_writer.interface;
 
 var settings_path: []const u8 = undefined;
 var state: State = undefined;
@@ -124,7 +120,7 @@ const State = struct {
 
 fn logFn(
     comptime message_level: std.log.Level,
-    comptime scope: @Type(.enum_literal),
+    comptime scope: @EnumLiteral(),
     comptime format: []const u8,
     args: anytype,
 ) void {
@@ -136,7 +132,7 @@ fn logFn(
     std.log.defaultLog(message_level, scope, format, args);
 }
 
-pub fn main() !void {
+pub fn main(init: std.process.Init.Minimal) !void {
     allocators.init(1 << 30);
     defer allocators.deinit();
 
@@ -158,7 +154,7 @@ pub fn main() !void {
         .title = "Cathode Run",
         // .size = .{ 1920, 1080 },
         .flags = .initMany(&.{ .high_pixel_density, .resizable, .fullscreen }),
-    });
+    }, init);
     defer engine.deinit();
 
     const args = global.args();
@@ -325,7 +321,6 @@ fn unload(self: *const Zengine) !void {
         self.renderer.gpu_device.wait(.any, &.{gfx_fence}) catch unreachable;
         self.renderer.gpu_device.release(&gfx_fence);
     }
-    try stderr.flush();
 }
 
 fn input(self: *const Zengine) !bool {
@@ -486,10 +481,14 @@ fn updateGain(track: zengine.audio.Track, gain: f32) !void {
 }
 
 fn updateSettings(settings: []const u32) !void {
-    const file = try std.fs.createFileAbsolute(settings_path, .{ .lock = .exclusive });
-    defer file.close();
+    const file = try std.Io.Dir.createFileAbsolute(
+        global.io(),
+        settings_path,
+        .{ .lock = .exclusive },
+    );
+    defer file.close(global.io());
     var out_buf: [256]u8 = undefined;
-    var writer = file.writer(&out_buf);
+    var writer = file.writer(global.io(), &out_buf);
     const w = &writer.interface;
     try w.writeInt(usize, settings.len, .little);
     for (settings) |setting| try w.writeInt(u32, setting, .little);
@@ -498,16 +497,17 @@ fn updateSettings(settings: []const u32) !void {
 
 fn readSettings(settings: []u32) !void {
     settings_path = try global.prefPath("settings.bin");
-    const file = std.fs.openFileAbsolute(
+    const file = std.Io.Dir.openFileAbsolute(
+        global.io(),
         settings_path,
         .{ .lock = .shared },
     ) catch |err| switch (err) {
         error.FileNotFound => return,
         else => return err,
     };
-    defer file.close();
+    defer file.close(global.io());
     var out_buf: [256]u8 = undefined;
-    var reader = file.reader(&out_buf);
+    var reader = file.reader(global.io(), &out_buf);
     const r = &reader.interface;
     const len = r.takeInt(usize, .little) catch return;
     if (len != settings.len) return;

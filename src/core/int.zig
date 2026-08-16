@@ -3,7 +3,7 @@ const assert = std.debug.assert;
 const log = std.log.scoped(.int);
 
 pub fn Int(comptime signedness: std.builtin.Signedness, comptime bits: comptime_int) type {
-    return @Type(.{ .int = .{ .signedness = signedness, .bits = bits } });
+    return @Int(signedness, bits);
 }
 
 pub fn center(inner: anytype, outer: anytype) @TypeOf(inner, outer) {
