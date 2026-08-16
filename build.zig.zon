@@ -1,8 +1,8 @@
 .{
     .name = .cathode_run,
-    .version = "0.2.2",
+    .version = "0.3.1",
     .fingerprint = 0xb1c5ec178b2bcc7a,
-    .minimum_zig_version = "0.15.2",
+    .minimum_zig_version = "0.16.0",
     .dependencies = .{
         .zengine = .{ .path = "../zengine" },
     },
