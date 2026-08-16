@@ -1,9 +1,11 @@
-const builtin = @import("builtin");
 const std = @import("std");
 const assert = std.debug.assert;
-const log = std.log.scoped(.main);
 const Allocator = std.mem.Allocator;
+const builtin = @import("builtin");
 
+const core = @import("core");
+const static = core.static;
+pub const cathode_run_options = core.cathode_run_options;
 const zengine = @import("zengine");
 const Zengine = zengine.Zengine;
 const allocators = zengine.allocators;
@@ -20,19 +22,20 @@ const time = zengine.time;
 const Engine = zengine.Engine;
 const ui = zengine.ui;
 const str = zengine.str;
+const RunCounter = time.Counter;
 
 const Assets = @import("Assets.zig");
-const vfx_pass = @import("vfx_pass.zig");
-const core = @import("core");
-const static = core.static;
 const game_render = @import("render.zig");
+const vfx_pass = @import("vfx_pass.zig");
 
-pub const cathode_run_options = core.cathode_run_options;
+const log = std.log.scoped(.main);
 
 pub const zengine_options: zengine.Options = .{
-    .app_identifier = "cathode-run",
+    .core = .{
+        .app_identifier = "cathode-run",
+        .log_allocations = false,
+    },
     .has_debug_ui = false,
-    .log_allocations = false,
 };
 
 pub const std_options: std.Options = .{
@@ -66,8 +69,6 @@ var log_window: zengine.ui.LogWindow = .invalid;
 
 var settings_path: []const u8 = undefined;
 var state: State = undefined;
-
-const RunCounter = time.Counter;
 
 const State = struct {
     assets: Assets,
