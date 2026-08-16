@@ -1,12 +1,12 @@
-const builtin = @import("builtin");
 const std = @import("std");
 const assert = std.debug.assert;
-const log = std.log.scoped(.game);
 const Allocator = std.mem.Allocator;
+const builtin = @import("builtin");
 
 const int = @import("int.zig");
 const Txt = @import("Txt.zig");
 
+const log = std.log.scoped(.game);
 pub const size_min: Point.U = .{ .x = 80, .y = 25 - status_height };
 pub const size_max: Point.U = .{ .x = 800, .y = 250 - status_height };
 pub const status_height = 3;

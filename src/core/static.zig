@@ -1,6 +1,7 @@
+const std = @import("std");
 const root = @import("root");
 const options = root.cathode_run_options;
-const std = @import("std");
+
 const game = @import("game.zig");
 const unit = @import("unit.zig");
 

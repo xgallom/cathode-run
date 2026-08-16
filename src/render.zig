@@ -1,6 +1,7 @@
 const std = @import("std");
 const assert = std.debug.assert;
 
+const core = @import("core");
 const zengine = @import("zengine");
 const allocators = zengine.allocators;
 const global = zengine.global;
@@ -12,8 +13,6 @@ const gfx = zengine.gfx;
 const Error = gfx.Error;
 const Renderer = gfx.Renderer;
 const sections = Renderer.sections;
-
-const core = @import("core");
 
 const log = std.log.scoped(.gfx_render);
 

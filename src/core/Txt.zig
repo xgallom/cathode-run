@@ -1,11 +1,11 @@
 const std = @import("std");
 const assert = std.debug.assert;
-const log = std.log.scoped(.txt);
 const Allocator = std.mem.Allocator;
 
 const cp437 = @import("cp437.zig");
 const unit = @import("unit.zig");
 
+const log = std.log.scoped(.txt);
 head: [*]u8,
 tail: [*]u8,
 capacity: unit.Bytes,

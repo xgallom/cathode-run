@@ -1,8 +1,9 @@
 const std = @import("std");
 const assert = std.debug.assert;
-const log = std.log.scoped(.prng);
+
 const int = @import("int.zig");
 
+const log = std.log.scoped(.prng);
 pub const Batch = struct {
     prng: int.Xoshiro128SSV,
 

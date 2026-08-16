@@ -1,10 +1,10 @@
 const std = @import("std");
 const assert = std.debug.assert;
-const log = std.log.scoped(.scratch);
 const Allocator = std.mem.Allocator;
 
 const unit = @import("unit.zig");
 
+const log = std.log.scoped(.scratch);
 fba: std.heap.FixedBufferAllocator,
 
 pub const capacity = unit.KB(4);

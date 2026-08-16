@@ -1,6 +1,7 @@
 const std = @import("std");
-const log = std.log.scoped(.unit);
 const Allocator = std.mem.Allocator;
+
+const log = std.log.scoped(.unit);
 
 pub const Bytes = extern struct {
     v: usize,

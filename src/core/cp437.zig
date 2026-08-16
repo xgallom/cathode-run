@@ -1,7 +1,7 @@
 const std = @import("std");
-const log = std.log.scoped(.cp437);
 const assert = std.debug.assert;
 
+const log = std.log.scoped(.cp437);
 pub const str_len_max = blk: {
     var acc = 0;
     for (raw_utf8) |str| acc = @max(acc, str.len);

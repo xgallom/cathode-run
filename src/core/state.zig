@@ -1,18 +1,17 @@
-const builtin = @import("builtin");
 const std = @import("std");
 const assert = std.debug.assert;
-const log = std.log.scoped(.core);
 const Allocator = std.mem.Allocator;
-
+const builtin = @import("builtin");
 const cathode_run_options = @import("root").cathode_run_options;
 
 const game = @import("game.zig");
 const int = @import("int.zig");
 const prng = @import("prng.zig");
-const static = @import("static.zig");
 const Scratch = @import("Scratch.zig");
+const static = @import("static.zig");
 const Txt = @import("Txt.zig");
 
+const log = std.log.scoped(.core);
 pub const InputEvent = enum {
     none,
     err,

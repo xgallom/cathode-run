@@ -1,16 +1,17 @@
-const builtin = @import("builtin");
 const std = @import("std");
 const assert = std.debug.assert;
-const log = std.log.scoped(.gen_menu_bg);
 const Allocator = std.mem.Allocator;
+const builtin = @import("builtin");
 
 const core = @import("core");
-const game_render = @import("render.zig");
-
 const int = core.int;
 const Q = int.Q;
 const sym = core.static.sym;
 const Dir = core.game.Dir;
+
+const game_render = @import("render.zig");
+
+const log = std.log.scoped(.gen_menu_bg);
 const w = game_render.cells[0];
 const h = game_render.cells[1];
 const pw = 36;
