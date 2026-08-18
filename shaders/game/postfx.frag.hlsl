@@ -31,9 +31,9 @@ static const float bloom_radius = 1.5;    // How far the light scatters (in pixe
 static const float scanlines = 512.0;     // Number of horizontal scanlines
 static const float scan_depth = 1.00;     // How dark the gaps get (0.0 to 1.0)
 static const float sigma = 0.35;          // Beam focus thickness
-static const float noise_amt = 0.0250;    // Static grain intensity
+static const float noise_amt = 0.0850;    // Static grain intensity
 static const float vign_amt = 1.00;       // Vignette strength
-static const float refl = 0.020;          // Glass glare intensity
+static const float refl = 0.070;          // Glass glare intensity
 static const float brightness = 1.00;     // Output brightness
 
 // --- Configuration Flags ---
@@ -139,15 +139,15 @@ static const float2 HEX_SAMPLES[13] = {
     float2(-0.693,   0.400)   // Top Left
 };
 
-void bloomLookup(
+static void bloomLookup(
     out float3 mono_bloom, out float3 vga_bloom,
     in float2 uv, in float2 texel, float ca_offset
 );
-float estimateGlobalLuminance();
-float random(float2 uv);
-float3 sampleUv(float2 uv);
-float3 tintLuma(float3 value, float3 tint);
-float sampleLuma(float3 value);
+static float estimateGlobalLuminance();
+static float random(float2 uv);
+static float3 sampleUv(float2 uv);
+static float3 tintLuma(float3 value, float3 tint);
+static float sampleLuma(float3 value);
 
 float4 main(float2 fragCoord : TEX_COORD) : SV_Target
 {
@@ -299,7 +299,7 @@ float4 main(float2 fragCoord : TEX_COORD) : SV_Target
 #endif // SHADER_ENABLED
 }
 
-void bloomLookup(
+static void bloomLookup(
     out float3 mono_bloom, out float3 vga_bloom,
     in float2 uv, in float2 texel, float ca_offset
 ) {
@@ -389,7 +389,7 @@ void bloomLookup(
 #endif // CHROMATIC_ABERRATION_ENABLED
 }
 
-float estimateGlobalLuminance() {
+static float estimateGlobalLuminance() {
 #ifdef GLOBAL_ILLUMINANCE_SAMPLING_ENABLED
     float luma_acc = 0.0;
     for (int i = 0; i < 13; i++) {
@@ -401,11 +401,11 @@ float estimateGlobalLuminance() {
 #endif
 }
 
-float random(float2 uv) {
+static float random(float2 uv) {
     return frac(sin(dot(uv, float2(12.9898, 78.233))) * 43758.5453123);
 }
 
-float3 sampleUv(float2 uv) {
+static float3 sampleUv(float2 uv) {
 #ifdef BOOTUP_ENABLED
     float bootup = saturate(1.0 - exp((bootup_delay - iTime) / max(bootup_time / 3.0, 0.001)));
 #else
@@ -414,11 +414,11 @@ float3 sampleUv(float2 uv) {
     return exposure * bootup * SrcBuffer.Sample(SrcSampler, uv).rgb;
 }
 
-float3 tintLuma(float3 value, float3 tint) {
+static inline float3 tintLuma(float3 value, float3 tint) {
     return dot(value, LUMA_WEIGHTS) * tint;
 }
 
-float sampleLuma(float3 value) {
+static inline float sampleLuma(float3 value) {
     return dot(value, LUMA_WEIGHTS);
 }
 

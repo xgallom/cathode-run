@@ -5,7 +5,6 @@ const builtin = @import("builtin");
 
 const core = @import("core");
 const static = core.static;
-pub const cathode_run_options = core.cathode_run_options;
 const zengine = @import("zengine");
 const Zengine = zengine.Zengine;
 const allocators = zengine.allocators;
@@ -17,7 +16,6 @@ const Scene = zengine.gfx.Scene;
 const global = zengine.global;
 const math = zengine.math;
 const perf = zengine.perf;
-const scheduler = zengine.scheduler;
 const time = zengine.time;
 const Engine = zengine.Engine;
 const ui = zengine.ui;
@@ -26,9 +24,15 @@ const RunCounter = time.Counter;
 
 const Assets = @import("Assets.zig");
 const game_render = @import("render.zig");
-const vfx_pass = @import("vfx_pass.zig");
+const PostFXPass = @import("PostFXPass.zig");
 
 const log = std.log.scoped(.main);
+
+pub const cathode_run_options: core.Options = .{
+    // .output_symbol_table = true,
+    .random_seed = false,
+    .allow_level_skip = true,
+};
 
 pub const zengine_options: zengine.Options = .{
     .core = .{
@@ -36,22 +40,48 @@ pub const zengine_options: zengine.Options = .{
         .log_allocations = false,
     },
     .has_debug_ui = false,
+    .gfx = .{
+        .wanted_swapchain_composition = .SDR,
+        .create_textures = false,
+    },
 };
 
 pub const std_options: std.Options = .{
     .log_level = .info,
-    .log_scope_levels = core.std_options.log_scope_levels,
+    .log_scope_levels = &.{
+        // .{ .scope = .gfx_renderer, .level = .debug },
+        // .{ .scope = .gfx_render, .level = .debug },
+        .{ .scope = .audio, .level = .info },
+        .{ .scope = .core, .level = .info },
+        .{ .scope = .cp437, .level = .info },
+        .{ .scope = .game, .level = .info },
+        .{ .scope = .int, .level = .info },
+        .{ .scope = .main, .level = .info },
+        .{ .scope = .platform, .level = .info },
+        .{ .scope = .param, .level = .info },
+        .{ .scope = .prng, .level = .info },
+        .{ .scope = .read, .level = .info },
+        .{ .scope = .scratch, .level = .info },
+        .{ .scope = .static, .level = .info },
+        .{ .scope = .txt, .level = .info },
+        .{ .scope = .unit, .level = .info },
+    },
     .logFn = logFn,
 };
 
 const RenderPasses = struct {
+    scale: gfx.pass.Blend = .{
+        .load_op = .clear,
+    },
+    postfx: PostFXPass = undefined,
+    letterbox: gfx.pass.Letterbox = undefined,
     render: gfx.pass.Render = .{
         .exposure = 1,
         .gamma = 1,
         .config = .{
             .has_agx = false,
             .has_lut = false,
-            .has_srgb = true,
+            .has_srgb = false,
         },
     },
 };
@@ -165,20 +195,29 @@ pub fn main(init: std.process.Init.Minimal) !void {
 }
 
 fn load(self: *const Zengine) !bool {
+    const sizes = try game_render.createTextures(self.renderer);
+    gfx_passes.postfx = .{ .size = sizes.tex_size };
+    gfx_passes.letterbox = .{
+        .scale = gfx.pass.Letterbox.calculateScale(sizes.tex_size, sizes.win_size),
+    };
+
     gfx_loader = try .init(self.renderer);
     errdefer gfx_loader.deinit();
     {
         errdefer gfx_loader.cancel();
         try gfx_loader.createGraphicsPipelines();
         try game_render.createGamePipeline(&gfx_loader);
-        try vfx_pass.init(&gfx_loader);
 
         try gfx.pass.Bloom.init(&gfx_loader);
 
         const main_win = self.engine.windows.getPtr("main");
         _ = try gfx_loader.loadLut(lut_key);
         const font = try gfx_loader.loadFont(font_key, 32);
-        _ = try gfx_loader.createSurfaceTexture("messages_buffer", main_win.logicalSize(), .default);
+        _ = try gfx_loader.createSurfaceTexture(
+            "messages_buffer",
+            main_win.logicalSize(),
+            .default,
+        );
 
         const frame_buffer = try gfx_loader.renderer.getOrCreateStorageBuffer("frame_buffer");
         {
@@ -197,22 +236,22 @@ fn load(self: *const Zengine) !bool {
             try gfx_loader.flagModified(.storage_buffer, "frame_buffer");
         }
 
-        const surf_size = game_render.surf_size;
-        const surf_tex = try gfx_loader.createSurfaceTexture("game_screen", surf_size, .default);
+        const frame_size = game_render.frame_size;
+        const frame_tex = try gfx_loader.createSurfaceTexture("frame_buffer", frame_size, .default);
         {
-            const surf = surf_tex.surf;
+            const surf = frame_tex.surf;
             const scr = surf.slice(u32);
-            assert(surf.width() * surf.height() == surf_size[0] * surf_size[1]);
-            for (0..surf_size[1]) |y| {
-                for (0..surf_size[0]) |x| {
-                    const w = surf_size[0] - 1;
-                    const h = surf_size[1] - 1;
+            assert(surf.width() * surf.height() == frame_size[0] * frame_size[1]);
+            for (0..frame_size[1]) |y| {
+                for (0..frame_size[0]) |x| {
+                    const w = frame_size[0] - 1;
+                    const h = frame_size[1] - 1;
                     const is_g = x == 0 and y == 0 or x == w and y == 0 or
                         x == 0 and y == h or x == w and y == h;
-                    scr[y * surf_size[0] + x] = surf.rgba(.{
-                        @intCast(255 * x / surf_size[0]),
+                    scr[y * frame_size[0] + x] = surf.rgba(.{
+                        @intCast(255 * x / frame_size[0]),
                         if (is_g) 255 else 0,
-                        @intCast(128 * y / surf_size[1]),
+                        @intCast(128 * y / frame_size[1]),
                         1,
                     });
                 }
@@ -250,12 +289,32 @@ fn load(self: *const Zengine) !bool {
 
     state = try .init(.{ .x = game_render.cells[0], .y = game_render.cells[1] });
     try readSettings(&state.game.ui.settings);
-    try loadSound(self, try state.assets.assetPath(.samples, static.asset.sample.activate), .oneshot);
-    try loadSound(self, try state.assets.assetPath(.samples, static.asset.sample.explosion), .oneshot);
+    try loadSound(
+        self,
+        try state.assets.assetPath(.samples, static.asset.sample.activate),
+        .oneshot,
+    );
+    try loadSound(
+        self,
+        try state.assets.assetPath(.samples, static.asset.sample.explosion),
+        .oneshot,
+    );
     try loadSound(self, try state.assets.assetPath(.samples, static.asset.sample.woosh), .oneshot);
-    try loadSound(self, try state.assets.assetPath(.samples, static.asset.sample.engine_idle), .movement);
-    try loadSound(self, try state.assets.assetPath(.samples, static.asset.sample.engine_x), .movement);
-    try loadSound(self, try state.assets.assetPath(.samples, static.asset.sample.engine_y), .movement);
+    try loadSound(
+        self,
+        try state.assets.assetPath(.samples, static.asset.sample.engine_idle),
+        .movement,
+    );
+    try loadSound(
+        self,
+        try state.assets.assetPath(.samples, static.asset.sample.engine_x),
+        .movement,
+    );
+    try loadSound(
+        self,
+        try state.assets.assetPath(.samples, static.asset.sample.engine_y),
+        .movement,
+    );
 
     for (&static.asset.music.levels) |level| try loadSound(
         self,
@@ -385,12 +444,18 @@ fn resize(self: *const Zengine) !bool {
         try self.renderer.gpu_device.wait(.any, &.{gfx_fence});
         self.renderer.gpu_device.release(&gfx_fence);
     }
-    try self.renderer.resizeTextures();
+    const sizes = try game_render.resizeTextures(self.renderer);
+    gfx_passes.postfx = .{ .size = sizes.tex_size };
+    gfx_passes.letterbox = .{
+        .scale = gfx.pass.Letterbox.calculateScale(sizes.tex_size, sizes.win_size),
+    };
     return true;
 }
+
 fn update(self: *const Zengine) !bool {
     if (!try state.tick()) return false;
-    if (state.game.session.state == .settings) {
+    if (core.int.flag.has(state.game.ui.state, core.state.UIState.one(.update_settings))) {
+        core.int.flag.clr(&state.game.ui.state, core.state.UIState.one(.update_settings));
         try updateSettings(&state.game.ui.settings);
         {
             const gain: f32 = @as(f32, @floatFromInt(state.game.ui.settings[2])) / 10.0;
@@ -530,8 +595,10 @@ fn render(self: *const Zengine) !void {
 
     self.ui.endDraw();
 
-    _ = try game_render.renderScreen(self.renderer, self.ui, &.{
-        gfx_passes.render.interface(),
-        vfx_pass.interface(),
-    }, &gfx_fence);
+    _ = try game_render.renderScreen(self.renderer, self.ui, .init(.{
+        .scale = gfx_passes.scale.interface(),
+        .postfx = gfx_passes.postfx.interface(),
+        .letterbox = gfx_passes.letterbox.interface(),
+        .render = gfx_passes.render.interface(),
+    }), &gfx_fence);
 }

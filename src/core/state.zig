@@ -154,6 +154,7 @@ pub const UIState = enum {
     sound_engine_idle_on,
     sound_engine_x_on,
     sound_engine_y_on,
+    update_settings,
 
     const flags = int.Flags(@This());
     pub const Flags = flags.U;

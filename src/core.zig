@@ -2,6 +2,7 @@ const std = @import("std");
 const assert = std.debug.assert;
 const Allocator = std.mem.Allocator;
 const builtin = @import("builtin");
+const cathode_run_options = @import("root").cathode_run_options;
 
 pub const cp437 = @import("core/cp437.zig");
 pub const game = @import("core/game.zig");
@@ -32,31 +33,6 @@ pub const Options = struct {
     music_fade_in_ms: u64 = 250,
     movement_fade_in_ms: u64 = 67,
     movement_fade_out_ms: u64 = 16,
-};
-
-pub const cathode_run_options: Options = .{
-    // .output_symbol_table = true,
-    .random_seed = false,
-    .allow_level_skip = true,
-};
-
-pub const std_options: std.Options = .{
-    .log_scope_levels = &.{
-        .{ .scope = .audio, .level = .info },
-        .{ .scope = .core, .level = .info },
-        .{ .scope = .cp437, .level = .info },
-        .{ .scope = .game, .level = .info },
-        .{ .scope = .int, .level = .info },
-        .{ .scope = .main, .level = .info },
-        .{ .scope = .platform, .level = .info },
-        .{ .scope = .param, .level = .info },
-        .{ .scope = .prng, .level = .info },
-        .{ .scope = .read, .level = .info },
-        .{ .scope = .scratch, .level = .info },
-        .{ .scope = .static, .level = .info },
-        .{ .scope = .txt, .level = .info },
-        .{ .scope = .unit, .level = .info },
-    },
 };
 
 pub fn transfer(self: *GameState, to: game.SessionState) !game.SessionState {
@@ -267,7 +243,10 @@ fn updateSettings(self: *GameState) !game.SessionState {
         } else if (in.isKey(&static.key.left)) {
             try self.sample_queue.appendBounded(.{ .start = static.asset.sample.activate });
             const value = &self.ui.settings[self.ui.active_idx];
-            if (value.* > 0) value.* -= 1;
+            if (value.* > 0) {
+                value.* -= 1;
+                int.flag.set(&self.ui.state, UIState.one(.update_settings));
+            }
         } else if (in.isKey(&static.key.right)) {
             try self.sample_queue.appendBounded(.{ .start = static.asset.sample.activate });
             const value = &self.ui.settings[self.ui.active_idx];
@@ -276,7 +255,10 @@ fn updateSettings(self: *GameState) !game.SessionState {
                 2, 3, 4 => 10,
                 else => unreachable,
             };
-            if (value.* < max) value.* += 1;
+            if (value.* < max) {
+                value.* += 1;
+                int.flag.set(&self.ui.state, UIState.one(.update_settings));
+            }
         } else if (in.isKey(&static.key.accept)) {
             try self.sample_queue.appendBounded(.{ .start = static.asset.sample.activate });
             self.ui.start_out_delay = @max(self.ui.delay, static.delay.settings_in);

@@ -16,6 +16,8 @@ const sections = Renderer.sections;
 
 const log = std.log.scoped(.gfx_render);
 
+// WARN: When changing these, also change them in the shaders!
+
 pub const ch_size: math.Point_u32 = .{ 30, 64 };
 pub const cells: math.Point_u32 = .{ 120, 32 };
 pub const font_atlas_size: math.Point_u32 = blk: {
@@ -23,33 +25,35 @@ pub const font_atlas_size: math.Point_u32 = blk: {
     math.point_u32.scale(&r, 16);
     break :blk r;
 };
-pub const surf_size: math.Point_u32 = blk: {
+pub const frame_size: math.Point_u32 = blk: {
     var r = ch_size;
     math.point_u32.mul(&r, &cells);
     break :blk r;
 };
 
 pub const CellState = [2]math.Vector4;
+pub const Pass = enum { scale, postfx, letterbox, render };
 
 pub fn createGamePipeline(loader: *gfx.Loader) !void {
     const vert = loader.renderer.shaders.get("system/screen.vert");
-    const game_frag = try loader.loadShader(.fragment, "game/screen.frag");
-    const frame_frag = try loader.loadShader(.fragment, "game/print_frame.frag");
-    _ = try loader.renderer.createGraphicsPipeline("game_screen", &.{
-        .vertex_shader = vert,
-        .fragment_shader = game_frag,
-        .target_info = .{
-            .color_target_descriptions = &.{
-                .{ .format = .hdr_f, .blend_state = .blend },
-            },
-        },
-    });
+    const frame_frag = try loader.loadShader(.fragment, "game/frame.frag");
+    const postfx_frag = try loader.loadShader(.fragment, "game/postfx.frag");
+
     _ = try loader.renderer.createGraphicsPipeline("game_frame", &.{
         .vertex_shader = vert,
         .fragment_shader = frame_frag,
         .target_info = .{
             .color_target_descriptions = &.{
-                .{ .format = .default, .blend_state = .default },
+                .{ .format = .default },
+            },
+        },
+    });
+    _ = try loader.renderer.createGraphicsPipeline("postfx", &.{
+        .vertex_shader = vert,
+        .fragment_shader = postfx_frag,
+        .target_info = .{
+            .color_target_descriptions = &.{
+                .{ .format = .hdr_f },
             },
         },
     });
@@ -62,7 +66,7 @@ pub fn fontAtlasOffset(c: u8) math.Point_u32 {
 pub fn renderScreen(
     self: *const Renderer,
     ui_ptr: ?*ui_mod.UI,
-    passes: []const gfx.pass.Interface,
+    passes: std.EnumArray(Pass, gfx.pass.Interface),
     fence: ?*gfx.GPUFence,
 ) !bool {
     const section = Renderer.sections.sub(.render);
@@ -76,19 +80,14 @@ pub fn renderScreen(
     }
 
     const frame_pipeline = self.pipelines.graphics.get("game_frame");
-    const game_pipeline = self.pipelines.graphics.get("game_screen");
-    const blend_pipeline = self.pipelines.graphics.get("blend");
-    // const render_pipeline = self.pipelines.graphics.get("render");
     const frame_buffer = self.storage_bufs.get("frame_buffer");
     const font_atlas = self.textures.get("font_atlas");
-    const game_screen = self.textures.get("game_screen");
-    const messages_buffer = self.textures.get("messages_buffer");
+    const frame_tex = self.textures.get("frame_buffer");
+    // const messages_buffer = self.textures.get("messages_buffer");
     const output_buffer = self.textures.get("output_buffer");
     const screen_buffer = self.textures.get("screen_buffer");
+    const render_buffer = self.textures.get("render_buffer");
     const font_atlas_sampler = self.samplers.get("nearest_clamp_to_edge");
-    const screen_sampler = self.samplers.get("bilinear_clamp_to_edge");
-
-    const fa = allocators.frame();
 
     section.sub(.acquire).begin();
     var command_buffer = try self.gpu_device.commandBuffer();
@@ -103,36 +102,16 @@ pub fn renderScreen(
     }
 
     section.sub(.init).begin();
-
-    const win_size = math.point_u32.to(f32, &self.window.logicalSize());
-    const wh_ratio = win_size[0] / win_size[1];
-    const scr_size = math.point_u32.to(f32, &.{ surf_size[0], surf_size[1] });
-    const scr_ratio = scr_size[0] / scr_size[1];
-    const scr_scl: math.Point_f32 = if (wh_ratio > scr_ratio) .{
-        wh_ratio / scr_ratio,
-        1,
-    } else .{
-        1,
-        scr_ratio / wh_ratio,
-    };
-
-    const uniform_buf = try fa.alloc(f32, 8);
-    uniform_buf[0] = scr_size[0];
-    uniform_buf[1] = scr_size[1];
-    uniform_buf[2] = @bitCast(@as(u32, cells[0]));
-    uniform_buf[3] = @bitCast(@as(u32, cells[1]));
-    uniform_buf[4] = @bitCast(@as(u32, ch_size[0]));
-    uniform_buf[5] = @bitCast(@as(u32, ch_size[1]));
-
     section.sub(.init).end();
 
+    const frame_size_f32 = math.point_f32.from(u32, &frame_size);
     {
         var frame_pass = try command_buffer.renderPass(&.{
-            .{ .texture = game_screen, .load_op = .clear, .store_op = .store },
+            .{ .texture = frame_tex, .load_op = .clear, .store_op = .store },
         }, null);
 
         frame_pass.bindPipeline(frame_pipeline);
-        command_buffer.pushUniformData(.fragment, 0, uniform_buf);
+        command_buffer.pushUniformData(.fragment, 0, &frame_size_f32);
         try frame_pass.bindSamplers(.fragment, 0, &.{
             .{ .texture = font_atlas, .sampler = font_atlas_sampler },
         });
@@ -140,58 +119,20 @@ pub fn renderScreen(
         frame_pass.drawScreen();
         frame_pass.end();
     }
-    {
-        var render_pass = try command_buffer.renderPass(&.{
-            .{ .texture = screen_buffer, .load_op = .clear, .store_op = .store },
-        }, null);
 
-        render_pass.bindPipeline(game_pipeline);
-        command_buffer.pushUniformData(.fragment, 0, &scr_scl);
-        try render_pass.bindSamplers(.fragment, 0, &.{
-            .{ .texture = game_screen, .sampler = screen_sampler },
-        });
-        render_pass.drawScreen();
-        render_pass.end();
-    }
-
-    {
-        var render_pass = try command_buffer.renderPass(&.{
-            .{ .texture = screen_buffer, .load_op = .load, .store_op = .store },
-        }, null);
-
-        render_pass.bindPipeline(blend_pipeline);
-        try render_pass.bindSamplers(.fragment, 0, &.{
-            .{ .texture = messages_buffer, .sampler = screen_sampler },
-        });
-        render_pass.drawScreen();
-        render_pass.end();
-    }
-
-    // They are swapped in opposite order first run
-    // src -> screen_buffer
-    // dst -> output_buffer
-    var src_buf = output_buffer;
-    var dst_buf = screen_buffer;
-    for (passes, 0..) |tex_pass, n| {
-        std.mem.swap(gfx.GPUTexture, &src_buf, &dst_buf);
-        try tex_pass.render(
-            self,
-            command_buffer,
-            src_buf,
-            if (n == passes.len - 1) swapchain else dst_buf,
-        );
-    }
+    try passes.get(.scale).render(self, command_buffer, frame_tex, screen_buffer);
+    try passes.get(.postfx).render(self, command_buffer, screen_buffer, output_buffer);
+    try passes.get(.letterbox).render(self, command_buffer, output_buffer, render_buffer);
+    try passes.get(.render).render(self, command_buffer, render_buffer, swapchain);
 
     // {
     //     var render_pass = try command_buffer.renderPass(&.{
-    //         .{ .texture = swapchain, .load_op = .clear, .store_op = .store },
+    //         .{ .texture = screen_buffer, .load_op = .load, .store_op = .store },
     //     }, null);
     //
-    //     render_pass.bindPipeline(render_pipeline);
-    //     command_buffer.pushUniformData(.fragment, 0, &self.settings.uniformBuffer());
+    //     render_pass.bindPipeline(blend_pipeline);
     //     try render_pass.bindSamplers(.fragment, 0, &.{
-    //         .{ .texture = output_buffer, .sampler = screen_sampler },
-    //         .{ .texture = lut_map, .sampler = lut_sampler },
+    //         .{ .texture = messages_buffer, .sampler = screen_sampler },
     //     });
     //     render_pass.drawScreen();
     //     render_pass.end();
@@ -208,25 +149,6 @@ pub fn renderScreen(
             };
             try ui.submitPass(command_buffer, screen_buffer);
             try render_pass.render(self, command_buffer, screen_buffer, swapchain);
-            // {
-            //     var render_pass = try command_buffer.renderPass(&.{
-            //         .{ .texture = swapchain, .load_op = .load, .store_op = .store },
-            //     }, null);
-            //
-            //     const ui_settings: Renderer.Settings = .{
-            //         .config = .{
-            //             .has_srgb = true,
-            //         },
-            //     };
-            //     render_pass.bindPipeline(render_pipeline);
-            //     command_buffer.pushUniformData(.fragment, 0, &ui_settings.uniformBuffer());
-            //     try render_pass.bindSamplers(.fragment, 0, &.{
-            //         .{ .texture = output_buffer, .sampler = screen_sampler },
-            //         .{ .texture = lut_map, .sampler = lut_sampler },
-            //     });
-            //     render_pass.drawScreen();
-            //     render_pass.end();
-            // }
         }
         section.sub(.ui).end();
     }
@@ -241,4 +163,62 @@ pub fn renderScreen(
 
     section.end();
     return true;
+}
+
+const Sizes = struct { win_size: math.Point_u32, tex_size: math.Point_u32 };
+pub fn createTextures(self: *Renderer) !Sizes {
+    const win_size = self.window.pixelSize();
+    const tex_size = calculateTextureSize(win_size);
+
+    log.debug(
+        "create textures: {}x{}, {}x{}",
+        .{ win_size[0], win_size[1], tex_size[0], tex_size[1] },
+    );
+
+    _ = try self.createTexture("screen_buffer", &.{
+        .type = .@"2D",
+        .format = .hdr_f,
+        .usage = .initMany(&.{ .sampler, .color_target }),
+        .size = tex_size,
+    });
+
+    _ = try self.createTexture("output_buffer", &.{
+        .type = .@"2D",
+        .format = .hdr_f,
+        .usage = .initMany(&.{ .sampler, .color_target }),
+        .size = tex_size,
+    });
+
+    _ = try self.createTexture("render_buffer", &.{
+        .type = .@"2D",
+        .format = .hdr_f,
+        .usage = .initMany(&.{ .sampler, .color_target }),
+        .size = win_size,
+    });
+
+    return .{ .win_size = win_size, .tex_size = tex_size };
+}
+
+pub fn resizeTextures(self: *Renderer) !Sizes {
+    self.deleteTexture("screen_buffer");
+    self.deleteTexture("output_buffer");
+    self.deleteTexture("render_buffer");
+    return try createTextures(self);
+}
+
+// 4112x2580
+// 4535x2340
+pub fn calculateTextureSize(win_size: math.Point_u32) math.Point_u32 {
+    const comp_size: math.Point_u32 = .{
+        win_size[1] * frame_size[0] / frame_size[1],
+        win_size[0] * frame_size[1] / frame_size[0],
+    };
+    log.debug("{}x{}", .{ comp_size[0], comp_size[1] });
+    return if (comp_size[0] >= win_size[0]) .{
+        win_size[0],
+        comp_size[1],
+    } else .{
+        comp_size[0],
+        win_size[1],
+    };
 }

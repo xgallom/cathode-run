@@ -1,6 +1,5 @@
 const std = @import("std");
-const root = @import("root");
-const options = root.cathode_run_options;
+const options = @import("root").cathode_run_options;
 
 const game = @import("game.zig");
 const unit = @import("unit.zig");
@@ -297,7 +296,7 @@ pub const txt = struct {
         "SETTINGS",
         "QUIT",
     };
-    pub const menu_bg = @embedFile("menu_bg.txt");
+    pub const menu_bg = @embedFile("menu_bg.bin");
 
     pub const settings_title = "SETTINGS";
     pub const settings_options = [_][]const u8{
