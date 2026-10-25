@@ -211,7 +211,7 @@ pub fn pcgHash(comptime N: comptime_int, input: @Vector(N, u32)) @Vector(N, u32)
 
 fn Xoshiro128SSN(comptime N: comptime_int) type {
     assert(N > 0);
-    return extern struct {
+    return struct {
         state: [4]U,
 
         pub const U = @Vector(N, u32);
@@ -238,7 +238,7 @@ fn Xoshiro128SSN(comptime N: comptime_int) type {
 pub const Xoshiro128SS = Xoshiro128SSN(1);
 pub const Xoshiro128SSV = Xoshiro128SSN(V(32).len);
 
-pub const Xoshiro256SS = extern struct {
+pub const Xoshiro256SS = struct {
     state: [4]u64,
 
     pub fn next(self: *@This()) u64 {

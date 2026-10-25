@@ -115,14 +115,12 @@ pub fn build(b: *std.Build) !void {
     run_step.dependOn(&run_cmd.step);
 
     run_cmd.step.dependOn(b.getInstallStep());
-
-    if (b.args) |args| run_cmd.addArgs(args);
+    run_cmd.addPassthruArgs();
 
     const gen_menu_bg_step = b.step("gen-menu-bg", "Generate menu background");
     const gen_menu_bg_cmd = b.addRunArtifact(gen_menu_bg_exe);
     gen_menu_bg_step.dependOn(&gen_menu_bg_cmd.step);
-
-    if (b.args) |args| gen_menu_bg_cmd.addArgs(args);
+    gen_menu_bg_cmd.addPassthruArgs();
 
     const mod_tests = b.addTest(.{
         .root_module = core,

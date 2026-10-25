@@ -22,7 +22,7 @@ pub const unit = @import("core/unit.zig");
 
 const log = std.log.scoped(.core);
 pub const Options = struct {
-    debug: bool = builtin.mode == .Debug,
+    debug: bool = builtin.mode == .debug,
     output_symbol_table: bool = false,
     random_seed: ?bool = null,
     allow_level_skip: ?bool = null,
