@@ -178,7 +178,6 @@ fn consumeInputs(self: *GameState) !game.SessionState {
             .err => return error.InputFailed,
             .down => int.flag.set(&self.ui.state, UIState.one(.key_down)),
             .up => int.flag.clr(&self.ui.state, UIState.one(.key_down)),
-            .query => {},
         }
         input_len += 1;
     }
@@ -214,7 +213,6 @@ fn updateMenu(self: *GameState) !game.SessionState {
             try self.sample_queue.appendBounded(.{ .start = static.asset.sample.activate });
             self.ui.start_out_delay = @max(self.ui.delay, static.delay.menu_in);
         },
-        .query => {},
     };
 
     return .menu;
@@ -263,7 +261,6 @@ fn updateSettings(self: *GameState) !game.SessionState {
             try self.sample_queue.appendBounded(.{ .start = static.asset.sample.activate });
             self.ui.start_out_delay = @max(self.ui.delay, static.delay.settings_in);
         },
-        .query => {},
     };
 
     return .settings;
@@ -292,7 +289,6 @@ fn updateIntro(self: *GameState) !game.SessionState {
             }
             int.flag.clr(&self.ui.state, UIState.many(&.{ .key_down, .waiting_release }));
         },
-        .query => {},
     };
 
     if (self.ui.delay > static.delay.intro_in and int.flag.has(self.ui.state, UIState.one(.skip))) {
@@ -378,7 +374,6 @@ fn updateRunning(self: *GameState) !game.SessionState {
                 self.session.score = score;
             }
         },
-        .query => {},
     };
 
     var pp: game.Point.U = undefined;
@@ -494,7 +489,6 @@ fn updatePaused(self: *GameState) !game.SessionState {
             try self.sample_queue.appendBounded(.{ .start = static.asset.sample.activate });
             return .running;
         },
-        .query => {},
     };
 
     return .paused;
@@ -525,7 +519,6 @@ fn updateScore(self: *GameState) !game.SessionState {
             }
             int.flag.clr(&self.ui.state, UIState.many(&.{ .key_down, .waiting_release }));
         },
-        .query => {},
     };
 
     if (self.ui.delay > static.delay.score_in and int.flag.has(self.ui.state, UIState.one(.skip))) {

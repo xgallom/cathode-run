@@ -14,7 +14,6 @@ pub fn build(b: *std.Build) !void {
     const core = b.createModule(.{
         .root_source_file = b.path("src/core.zig"),
         .target = target,
-        .optimize = optimize,
     });
 
     const exe_mod = b.createModule(.{

@@ -17,7 +17,6 @@ pub const InputEvent = enum {
     err,
     down,
     up,
-    query,
 };
 
 pub const InputResult = struct {
@@ -35,15 +34,6 @@ pub const InputResult = struct {
 
     pub fn up(keycode: u32) @This() {
         return .{ .event = .up, .keycode = keycode };
-    }
-
-    pub fn query(query_type: QueryType) @This() {
-        return .{ .event = .query, .keycode = @intFromEnum(query_type) };
-    }
-
-    pub fn queryType(self: @This()) QueryType {
-        assert(self.event == .query);
-        return @enumFromInt(self.keycode);
     }
 
     pub fn isKey(self: @This(), keys: []const u32) bool {

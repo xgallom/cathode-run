@@ -5,7 +5,7 @@ const zengine = @import("zengine");
 const gfx = zengine.gfx;
 const math = zengine.math;
 
-const log = std.log.scoped(.pass_deathly_grayscale);
+const log = std.log.scoped(.post_fx_pass);
 
 size: math.Point_u32,
 
