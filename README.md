@@ -4,7 +4,7 @@ A high-performance, low-level retro-style terminal arcade game written in Zig, u
 
 ## Requirements
 
-* Zig Compiler: Version 0.15.2 (or compatible)
+* Zig Compiler: Version 0.17.0
 * Build System Tools: Standard build utilities for your host OS (Xcode command-line tools / macOS SDK for macOS builds)
 
 ## Installation
