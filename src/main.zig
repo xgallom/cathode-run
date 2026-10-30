@@ -381,14 +381,14 @@ fn loadSound(
 fn reset() !void {}
 
 fn unload(self: *const Zengine) !void {
-    state.deinit();
-    allocs_window.deinit();
-    perf_window.deinit();
-    gfx_loader.deinit();
     if (gfx_fence.isValid()) {
         self.renderer.gpu_device.wait(.any, &.{gfx_fence}) catch unreachable;
         self.renderer.gpu_device.release(&gfx_fence);
     }
+    state.deinit();
+    allocs_window.deinit(allocators.ui());
+    perf_window.deinit();
+    gfx_loader.deinit();
 }
 
 fn input(self: *const Zengine) !bool {
