@@ -13,9 +13,9 @@ Texture2D<float4> FontAtlas : register(t0, space2);
 SamplerState FontAtlasSampler  : register(s0, space2);
 StructuredBuffer<CellState> FrameBuffer: register(t1, space2);
 
-static const float2 cell_size = float2(30.0, 64.0);
-static const float2 inv_cell_size = float2(1.0/30.0, 1.0/64.0);
-static const float2 inv_atlas_size = float2(1.0/(16.0*30.0), 1.0/(16.0*64.0));
+static const float2 cell_size = float2(27.0, 64.0);
+static const float2 inv_cell_size = float2(1.0/27.0, 1.0/64.0);
+static const float2 inv_atlas_size = float2(1.0/(16.0*27.0), 1.0/(16.0*64.0));
 static const uint frame_w = 120;
 static const uint frame_h = 32;
 

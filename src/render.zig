@@ -18,7 +18,7 @@ const log = std.log.scoped(.gfx_render);
 
 // WARN: When changing these, also change them in the shaders!
 
-pub const ch_size: math.Point_u32 = .{ 30, 64 };
+pub const ch_size: math.Point_u32 = .{ 27, 64 };
 pub const cells: math.Point_u32 = .{ 120, 32 };
 pub const font_atlas_size: math.Point_u32 = blk: {
     var r = ch_size;

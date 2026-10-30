@@ -183,8 +183,11 @@ pub fn main(init: std.process.Init.Minimal) !void {
         .render = &render,
     }, &.{
         .title = "Cathode Run",
-        // .size = .{ 1920, 1080 },
-        .flags = .initMany(&.{ .high_pixel_density, .resizable, .fullscreen }),
+        .size = .{ 1920, 1080 },
+        .flags = .initMany(&.{
+            .high_pixel_density,
+            .resizable,
+        }),
     }, init);
     defer engine.deinit();
 

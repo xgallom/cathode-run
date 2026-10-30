@@ -9,9 +9,9 @@ SamplerState SrcSampler  : register(s0, space2);
 // --- Terminal Parameters ---
 static const float cells_x = 120;       // Cell width in terminal
 static const float cells_y = 32;       // Cell height in terminal
-static const float cell_w_px = 7.5;       // Cell width in terminal
+static const float cell_w_px = 6.75;       // Cell width in terminal
 static const float cell_h_px = 16.0;       // Cell height in terminal
-static const float pixels_per_cell = 7.5; // How many pixels per character line
+static const float pixels_per_cell = 6.75; // How many pixels per character line
 static const float scans_per_cell = 16.0;  // How many scanlines per character
 
 // --- Configurable Parameters ---
