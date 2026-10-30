@@ -7,7 +7,7 @@ Texture2D<float4> SrcBuffer : register(t0, space2);
 SamplerState SrcSampler  : register(s0, space2);
 
 // --- Terminal Parameters ---
-static const float cells_x = 120;       // Cell width in terminal
+static const float cells_x = 128;       // Cell width in terminal
 static const float cells_y = 32;       // Cell height in terminal
 static const float cell_w_px = 6.75;       // Cell width in terminal
 static const float cell_h_px = 16.0;       // Cell height in terminal

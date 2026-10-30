@@ -751,7 +751,7 @@ fn drawSetting(self: *GameState, frame: *const Frame, n: usize, x: u32) !void {
     // "[0123456789  100% "
     const msg_y = menu_y + 5;
     switch (n) {
-        0 => {
+        static.setting.gap_width => {
             frame.write(
                 stxt.settings_widths[0],
                 if (value == 0) attr_active else attr_item,
@@ -769,7 +769,7 @@ fn drawSetting(self: *GameState, frame: *const Frame, n: usize, x: u32) !void {
                     stxt.settings_widths[1].len + 2, size.x),
             );
         },
-        1 => {
+        static.setting.delay_running => {
             frame.write(
                 stxt.settings_game_speeds[0],
                 if (value == 0) attr_active else attr_item,
@@ -794,7 +794,36 @@ fn drawSetting(self: *GameState, frame: *const Frame, n: usize, x: u32) !void {
                 ),
             );
         },
-        2, 3, 4 => {
+        static.setting.path_density => {
+            frame.write(
+                stxt.settings_path_densities[0],
+                if (value == 0) attr_active else attr_item,
+                int.idx2D(msg_y + n, x0, size.x),
+            );
+            frame.write(
+                stxt.settings_path_densities[1],
+                if (value == 1) attr_active else attr_item,
+                int.idx2D(
+                    msg_y + n,
+                    x0 + stxt.settings_path_densities[0].len + 1,
+                    size.x,
+                ),
+            );
+            frame.write(
+                stxt.settings_path_densities[2],
+                if (value == 2) attr_active else attr_item,
+                int.idx2D(
+                    msg_y + n,
+                    x0 + stxt.settings_path_densities[0].len + stxt.settings_path_densities[1].len +
+                        2,
+                    size.x,
+                ),
+            );
+        },
+        static.setting.gain_oneshot,
+        static.setting.gain_movement,
+        static.setting.gain_music,
+        => {
             frame.fill(
                 10,
                 static.sym.empty_bar,

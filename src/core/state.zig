@@ -154,7 +154,7 @@ pub const UIState = enum {
 };
 
 pub const UISession = struct {
-    settings: [5]u32 = .{ 1, 1, 6, 4, 7 },
+    settings: [6]u32 = .{ 1, 1, 1, 6, 4, 7 },
     state: UIState.Flags = UIState.none,
     input: game.Dir.Flags = game.Dir.none,
     delay: u64 = 0,
@@ -263,20 +263,41 @@ pub const GameState = struct {
         // wave in Q20 (Q14 sin * Q6 amplitude)
         // 0.6 * sin(0.07 * t) + 0.4 * cos(0.03 * t)
         // target values for seed 0: 11682 5007 38 26
-        self.settings.gap_width_max = static.gap_width.max[self.ui.settings[0]];
-        self.settings.gap_width_min = static.gap_width.min[self.ui.settings[0]];
-        self.settings.delay_running_max = @intCast(static.delay.running_max[self.ui.settings[1]]);
-        self.settings.delay_running_min = @intCast(static.delay.running_min[self.ui.settings[1]]);
+        self.settings.gap_width_max = static.gap_width.max[
+            self.ui.settings[static.setting.gap_width]
+        ];
+        self.settings.gap_width_min = static.gap_width.min[
+            self.ui.settings[static.setting.gap_width]
+        ];
+        self.settings.delay_running_max = @intCast(static.delay.running_max[
+            self.ui.settings[static.setting.delay_running]
+        ]);
+        self.settings.delay_running_min = @intCast(static.delay.running_min[
+            self.ui.settings[static.setting.delay_running]
+        ]);
         self.prng.seed(self.session.seed, self.session.score);
         var prng_r: prng.Row = undefined;
         self.prng.compact(&prng_r, rngIdxForScore(self.session.score));
-        self.path.p1 = @intCast(prng_r.range(9349, 15449));
-        self.path.p2 = @intCast(prng_r.range(3737, 5737));
+        self.path.p1 = @intCast(static.path_density.p1[
+            self.ui.settings[static.setting.path_density]
+        ]); //
+        self.path.p2 = @intCast(static.path_density.p2[
+            self.ui.settings[static.setting.path_density]
+        ]);
+        self.path.ph1 = @as(u32, @intCast(prng_r.range(9349, 15449))) -% 11682;
+        self.path.ph2 = @as(u32, @intCast(prng_r.range(3737, 5737))) -% 5007;
         self.path.amp1 = prng_r.range(29, 57);
         self.path.amp2 = 64 - self.path.amp1;
         log.info(
-            "path: {} {} {} {}",
-            .{ self.path.p1, self.path.p2, self.path.amp1, self.path.amp2 },
+            "path: {} {} {} {} {} {}",
+            .{
+                self.path.p1,
+                self.path.p2,
+                self.path.ph1,
+                self.path.ph2,
+                self.path.amp1,
+                self.path.amp2,
+            },
         );
         @memset(self.symMap(), static.sym.gnd);
         // const wall = static.sym.dbl_walls[game.Dir.many(&.{ .up, .down })];
@@ -455,8 +476,8 @@ pub const GameState = struct {
         const skew = prng_r.bound(static.score.level(score) + 1);
         const gap_pos = blk: {
             const path = self.path;
-            const wave = path.amp1 * int.sin(Q(10).mod(Q(10).round(score * path.p1))) +
-                path.amp2 * int.cos(Q(10).mod(Q(10).round(score * path.p2)));
+            const wave = path.amp1 * int.sin(Q(10).mod(Q(10).round(score * path.p1 +% path.ph1))) +
+                path.amp2 * int.cos(Q(10).mod(Q(10).round(score * path.p2 +% path.ph2)));
             const offset = Q(20).round(wave * 25);
             const center = @divTrunc(self.session.size.i().x, 2) + offset;
             const jitter = prng_r.range(-1, 1);

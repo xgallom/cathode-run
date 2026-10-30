@@ -128,6 +128,8 @@ pub const Session = struct {
 pub const PathConfig = struct {
     p1: u32,
     p2: u32,
+    ph1: u32,
+    ph2: u32,
     amp1: i32,
     amp2: i32,
 };

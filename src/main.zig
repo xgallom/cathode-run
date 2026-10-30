@@ -30,7 +30,7 @@ const log = std.log.scoped(.main);
 
 pub const cathode_run_options: core.Options = .{
     // .output_symbol_table = true,
-    .random_seed = false,
+    // .random_seed = false,
     .allow_level_skip = true,
 };
 
@@ -135,7 +135,7 @@ const State = struct {
             switch (try core.transfer(&self.game, to)) {
                 .init => {
                     if (cathode_run_options.random_seed orelse !cathode_run_options.debug) {
-                        self.game.session.seed = try self.rnd.next();
+                        self.game.session.seed = @truncate(self.rnd.next());
                     } else {
                         self.game.session.seed = 0;
                     }
@@ -183,10 +183,11 @@ pub fn main(init: std.process.Init.Minimal) !void {
         .render = &render,
     }, &.{
         .title = "Cathode Run",
-        .size = .{ 1920, 1080 },
+        // .size = .{ 1920, 1080 },
         .flags = .initMany(&.{
             .high_pixel_density,
             .resizable,
+            .fullscreen,
         }),
     }, init);
     defer engine.deinit();
@@ -350,18 +351,24 @@ fn loadSound(
     assert(track.isValid());
     switch (config) {
         .oneshot => {
-            const gain: f32 = @as(f32, @floatFromInt(state.game.ui.settings[2])) / 10.0;
+            const gain: f32 = @as(f32, @floatFromInt(state.game.ui.settings[
+                static.setting.gain_oneshot
+            ])) / 10.0;
             try track.setGain(gain);
         },
         .movement => {
-            const gain: f32 = @as(f32, @floatFromInt(state.game.ui.settings[3])) / 10.0;
+            const gain: f32 = @as(f32, @floatFromInt(state.game.ui.settings[
+                static.setting.gain_movement
+            ])) / 10.0;
             try track.setGain(gain);
             try track.setLooping(true);
             try track.setFadeIn(cathode_run_options.movement_fade_in_ms);
             try track.setFadeOut(cathode_run_options.movement_fade_out_ms);
         },
         .music => {
-            const gain: f32 = @as(f32, @floatFromInt(state.game.ui.settings[4])) / 10.0;
+            const gain: f32 = @as(f32, @floatFromInt(state.game.ui.settings[
+                static.setting.gain_music
+            ])) / 10.0;
             try track.setGain(gain);
             try track.setLooping(true);
             try track.setFadeIn(cathode_run_options.music_fade_in_ms);
@@ -461,7 +468,9 @@ fn update(self: *const Zengine) !bool {
         core.int.flag.clr(&state.game.ui.state, core.state.UIState.one(.update_settings));
         try updateSettings(&state.game.ui.settings);
         {
-            const gain: f32 = @as(f32, @floatFromInt(state.game.ui.settings[2])) / 10.0;
+            const gain: f32 = @as(f32, @floatFromInt(state.game.ui.settings[
+                static.setting.gain_oneshot
+            ])) / 10.0;
             try updateGain(self.audio.tracks.get(
                 try state.assets.assetPath(.samples, static.asset.sample.activate),
             ), gain);
@@ -473,7 +482,9 @@ fn update(self: *const Zengine) !bool {
             ), gain);
         }
         {
-            const gain: f32 = @as(f32, @floatFromInt(state.game.ui.settings[3])) / 10.0;
+            const gain: f32 = @as(f32, @floatFromInt(state.game.ui.settings[
+                static.setting.gain_movement
+            ])) / 10.0;
             try updateGain(self.audio.tracks.get(
                 try state.assets.assetPath(.samples, static.asset.sample.engine_idle),
             ), gain);
@@ -485,7 +496,9 @@ fn update(self: *const Zengine) !bool {
             ), gain);
         }
         {
-            const gain: f32 = @as(f32, @floatFromInt(state.game.ui.settings[4])) / 10.0;
+            const gain: f32 = @as(f32, @floatFromInt(state.game.ui.settings[
+                static.setting.gain_music
+            ])) / 10.0;
             for (static.asset.music.levels) |path| {
                 try updateGain(self.audio.tracks.get(
                     try state.assets.assetPath(.music, path),

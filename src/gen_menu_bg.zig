@@ -11,6 +11,7 @@ const Dir = core.game.Dir;
 
 const game_render = @import("render.zig");
 
+const io = std.Io.Threaded.global_single_threaded.io();
 const log = std.log.scoped(.gen_menu_bg);
 const w = game_render.cells[0];
 const h = game_render.cells[1];
@@ -18,7 +19,7 @@ const pw = 36;
 const ph = 15;
 
 pub fn main() !void {
-    var allocator = std.heap.GeneralPurposeAllocator(.{}).init;
+    var allocator = std.heap.DebugAllocator(.{}).init;
     defer _ = allocator.deinit();
     const gpa = allocator.allocator();
 
@@ -32,9 +33,9 @@ pub fn main() !void {
     try generateFrame(map);
 
     // for (0..h) |y| map[y * w] = '\n';
-    const stdout = std.fs.File.stdout();
+    const stdout = std.Io.File.stdout();
     var stdout_buf: [256]u8 = undefined;
-    var writer = stdout.writer(&stdout_buf);
+    var writer = stdout.writer(io, &stdout_buf);
     const wr = &writer.interface;
     try wr.writeAll(map);
     try wr.flush();

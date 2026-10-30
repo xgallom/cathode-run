@@ -23,6 +23,21 @@ pub const asset = struct {
     };
 };
 
+pub const setting = struct {
+    pub const gap_width = 0;
+    pub const delay_running = 1;
+    pub const path_density = 2;
+    pub const gain_oneshot = 3;
+    pub const gain_movement = 4;
+    pub const gain_music = 5;
+};
+
+pub const path_density = struct {
+    // target values for seed 0: 11682 5007 38 26
+    pub const p1 = [_]i32{ 9349, 11682, 15449 };
+    pub const p2 = [_]i32{ 3737, 5007, 5747 };
+};
+
 pub const gap_width = struct {
     pub const max = [_]i32{ 64, 64, 32 };
     pub const min = [_]i32{ 32, 18, 12 };
@@ -302,6 +317,7 @@ pub const txt = struct {
     pub const settings_options = [_][]const u8{
         "GAP WIDTH    ",
         "GAME SPEED   ",
+        "PATH CURVE   ",
         "SOUND VOLUME ",
         "ENGINE VOLUME",
         "MUSIC VOLUME ",
@@ -315,6 +331,11 @@ pub const txt = struct {
         "SLOW",
         "NORMAL",
         "FAST",
+    };
+    pub const settings_path_densities = [_][]const u8{
+        "FLAT",
+        "NORMAL",
+        "TIGHT",
     };
 
     pub const tutor = tjoin(&.{
