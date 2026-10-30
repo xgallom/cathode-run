@@ -212,8 +212,6 @@ fn load(self: *const Zengine) !bool {
         try gfx_loader.createGraphicsPipelines();
         try game_render.createGamePipeline(&gfx_loader);
 
-        try gfx.pass.Bloom.init(&gfx_loader);
-
         const main_win = self.engine.windows.getPtr("main");
         _ = try gfx_loader.loadLut(lut_key);
         const font = try gfx_loader.loadFont(font_key, 32);
