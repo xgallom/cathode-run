@@ -124,14 +124,14 @@ const State = struct {
     }
 
     pub fn tick(self: *@This()) !bool {
-        self.run_counter.add(1);
+        self.run_counter.add(global.sinceLastFrameNano());
         while (self.run_counter.run()) {
             const to = try core.update(&self.game);
             state.game.input_buf[0] = .none;
             state.input_idx = 0;
 
             try core.render(&self.game, &self.frame);
-            self.run_counter.interval = core.sleep(&self.game);
+            self.run_counter.interval = core.sleep(&self.game) * 1000; // us to ns
             switch (try core.transfer(&self.game, to)) {
                 .init => {
                     if (cathode_run_options.random_seed orelse !cathode_run_options.debug) {

@@ -87,6 +87,7 @@ pub fn renderScreen(
     const output_buffer = self.textures.get("output_buffer");
     const screen_buffer = self.textures.get("screen_buffer");
     const render_buffer = self.textures.get("render_buffer");
+    const ui_buffer = self.textures.get("ui_buffer");
     const font_atlas_sampler = self.samplers.get("nearest_clamp_to_edge");
 
     section.sub(.acquire).begin();
@@ -143,12 +144,11 @@ pub fn renderScreen(
         if (ui.render_ui) {
             const render_pass = gfx.pass.Render{
                 .config = .{
-                    .has_srgb = true,
                     .clear = false,
                 },
             };
-            try ui.submitPass(command_buffer, screen_buffer);
-            try render_pass.render(self, command_buffer, screen_buffer, swapchain);
+            try ui.submitPass(command_buffer, ui_buffer);
+            try render_pass.render(self, command_buffer, ui_buffer, swapchain);
         }
         section.sub(.ui).end();
     }
@@ -196,6 +196,13 @@ pub fn createTextures(self: *Renderer) !Sizes {
         .size = win_size,
     });
 
+    _ = try self.createTexture("ui_buffer", &.{
+        .type = .@"2D",
+        .format = self.swapchainFormat(),
+        .usage = .initMany(&.{ .sampler, .color_target }),
+        .size = win_size,
+    });
+
     return .{ .win_size = win_size, .tex_size = tex_size };
 }
 
@@ -203,6 +210,7 @@ pub fn resizeTextures(self: *Renderer) !Sizes {
     self.deleteTexture("screen_buffer");
     self.deleteTexture("output_buffer");
     self.deleteTexture("render_buffer");
+    self.deleteTexture("ui_buffer");
     return try createTextures(self);
 }
 

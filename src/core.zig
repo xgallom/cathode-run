@@ -167,7 +167,7 @@ pub fn sleep(self: *GameState) u64 {
     if (self.session.state != .paused and self.ui.update_delay) {
         self.ui.delay += frames * static.delay.step;
     }
-    return frames;
+    return frames * static.delay.step;
 }
 
 fn consumeInputs(self: *GameState) !game.SessionState {
